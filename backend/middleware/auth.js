@@ -31,7 +31,7 @@ const verifyWallet = async (req, res, next) => {
 
       // Create new organization if whitelisted
       organization = new Organization({
-        name: 'HADU VIET NAM TRAINING ACADEMY', // Default name
+        name: 'NAM CAN THO UNIVERSITY', // Default name
         walletAddress: normalizedAddress,
         isWhitelisted: true,
         isActive: true

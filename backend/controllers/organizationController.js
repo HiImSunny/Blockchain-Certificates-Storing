@@ -33,7 +33,7 @@ exports.login = async (req, res) => {
 
       // Create new organization
       organization = new Organization({
-        name: 'HADU VIET NAM TRAINING ACADEMY',
+        name: 'NAM CAN THO UNIVERSITY',
         walletAddress: normalizedAddress,
         isWhitelisted: true,
         isActive: true
