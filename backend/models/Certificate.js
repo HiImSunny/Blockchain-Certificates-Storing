@@ -84,7 +84,7 @@ const certificateSchema = new mongoose.Schema({
   organizationName: {
     type: String,
     required: true,
-    default: 'HADU VIET NAM TRAINING ACADEMY JOINT STOCK COMPANY'
+    default: 'NAM CAN THO UNIVERSITY'
   },
   
   organizationWallet: {
