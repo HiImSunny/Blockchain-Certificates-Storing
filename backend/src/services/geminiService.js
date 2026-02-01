@@ -13,10 +13,19 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 export const extractCertificateData = async (filePath, mimeType) => {
     try {
         if (!process.env.GEMINI_API_KEY) {
-            throw new Error('Gemini API key not configured');
+            console.warn('Gemini API key not found, skipping AI extraction.');
+            return { extractedText: '', structuredData: {} };
         }
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        // List of models to try in order
+        const modelsToTry = [
+            'gemini-2.5-flash',
+            'gemini-2.5-pro',
+            'gemini-2.0-flash'
+        ];
+
+        let result = null;
+        let usedModel = '';
 
         // Read file as base64
         const fileBuffer = readFileSync(filePath);
@@ -47,19 +56,33 @@ IMPORTANT:
 - For Vietnamese text, preserve the original Vietnamese characters
 - Be accurate and do not make assumptions
 - Return ONLY the JSON object, no additional text
-
-Certificate to analyze:
 `;
 
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    data: base64Data,
-                    mimeType: mimeType,
-                },
-            },
-        ]);
+        // Try models sequentially
+        for (const modelName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({ model: modelName });
+                result = await model.generateContent([
+                    prompt,
+                    {
+                        inlineData: {
+                            data: base64Data,
+                            mimeType: mimeType,
+                        },
+                    },
+                ]);
+                usedModel = modelName;
+                break; // If successful, stop trying
+            } catch (err) {
+                console.warn(`Model ${modelName} failed:`, err.message);
+                // Continue to next model
+            }
+        }
+
+        if (!result) {
+            console.warn('All Gemini models failed. AI extraction skipped.');
+            return { extractedText: '', structuredData: {} };
+        }
 
         const response = await result.response;
         const text = response.text();
@@ -76,7 +99,6 @@ Certificate to analyze:
             }
         } catch (parseError) {
             console.warn('Failed to parse Gemini response as JSON:', parseError);
-            // Return raw text if JSON parsing fails
             structuredData = { rawText: text };
         }
 
@@ -85,8 +107,9 @@ Certificate to analyze:
             structuredData,
         };
     } catch (error) {
-        console.error('Gemini AI extraction error:', error);
-        throw new Error(`Failed to extract certificate data: ${error.message}`);
+        console.error('Gemini AI extraction error:', error.message);
+        // Do not throw, return empty to allow upload to proceed
+        return { extractedText: '', structuredData: {} };
     }
 };
 

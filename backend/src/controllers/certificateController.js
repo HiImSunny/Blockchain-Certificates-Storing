@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 export const uploadCertificate = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ error: 'Chưa có file được tải lên' });
         }
 
         const filePath = req.file.path;
@@ -142,7 +142,7 @@ export const confirmCertificate = async (req, res) => {
         // Validate required fields
         if (!certificateId || !certHash || !txHash || !issuerAddress) {
             return res.status(400).json({
-                error: 'Missing required fields: certificateId, certHash, txHash, issuerAddress',
+                error: 'Thiếu các trường bắt buộc: certificateId, certHash, txHash, issuerAddress',
             });
         }
 
@@ -165,7 +165,7 @@ export const confirmCertificate = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Certificate confirmed and saved to database',
+            message: 'Đã xác nhận và lưu chứng chỉ vào cơ sở dữ liệu',
             certificate,
         });
     } catch (error) {
@@ -187,7 +187,7 @@ export const verifyCertificateById = async (req, res) => {
 
         if (!certificate) {
             return res.status(404).json({
-                error: 'Certificate not found in database',
+                error: 'Không tìm thấy chứng chỉ trong cơ sở dữ liệu',
             });
         }
 
@@ -231,7 +231,7 @@ export const verifyCertificateById = async (req, res) => {
 export const verifyCertificateByFile = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ error: 'Chưa có file được tải lên' });
         }
 
         const filePath = req.file.path;
@@ -248,7 +248,7 @@ export const verifyCertificateByFile = async (req, res) => {
 
         if (!certificate) {
             return res.status(404).json({
-                error: 'Certificate not found with this file hash',
+                error: 'Không tìm thấy chứng chỉ với mã hash này',
                 certHash,
             });
         }
@@ -307,7 +307,7 @@ export const downloadCertificate = async (req, res) => {
         const certificate = await Certificate.findOne({ certificateId: certId });
 
         if (!certificate) {
-            return res.status(404).json({ error: 'Certificate not found' });
+            return res.status(404).json({ error: 'Không tìm thấy chứng chỉ' });
         }
 
         res.json({
@@ -332,7 +332,7 @@ export const revokeCertificateById = async (req, res) => {
 
         if (!certificateId || !txHash) {
             return res.status(400).json({
-                error: 'Missing required fields: certificateId, txHash',
+                error: 'Thiếu các trường bắt buộc: certificateId, txHash',
             });
         }
 
@@ -344,12 +344,12 @@ export const revokeCertificateById = async (req, res) => {
         );
 
         if (!certificate) {
-            return res.status(404).json({ error: 'Certificate not found' });
+            return res.status(404).json({ error: 'Không tìm thấy chứng chỉ' });
         }
 
         res.json({
             success: true,
-            message: 'Certificate revoked successfully',
+            message: 'Đã thu hồi chứng chỉ thành công',
             certificate,
         });
     } catch (error) {

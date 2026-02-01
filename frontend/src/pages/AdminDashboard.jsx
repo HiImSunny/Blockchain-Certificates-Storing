@@ -53,7 +53,7 @@ const AdminDashboard = () => {
         try {
             const currentAccount = await getCurrentAccount();
             if (!currentAccount) {
-                setError('Please connect MetaMask first');
+                setError('Vui lòng kết nối MetaMask trước');
                 setLoading(false);
                 return;
             }
@@ -62,7 +62,7 @@ const AdminDashboard = () => {
 
             const adminCheck = await checkAdmin(currentAccount);
             if (!adminCheck.isAdmin) {
-                setError('Access Denied: You are not an admin');
+                setError('Truy cập bị từ chối: Bạn không phải admin');
                 setLoading(false);
                 return;
             }
@@ -95,7 +95,7 @@ const AdminDashboard = () => {
 
     const handleOfficerAction = async () => {
         if (!officerAddress.trim()) {
-            setError('Please enter officer address');
+            setError('Vui lòng nhập địa chỉ officer');
             return;
         }
 
@@ -109,10 +109,10 @@ const AdminDashboard = () => {
             let txHash;
             if (officerAction === 'add') {
                 txHash = await blockchainAddOfficer(signer, officerAddress);
-                setSuccess(`Officer added successfully! TX: ${txHash}`);
+                setSuccess(`Thêm officer thành công! TX: ${txHash}`);
             } else {
                 txHash = await blockchainRemoveOfficer(signer, officerAddress);
-                setSuccess(`Officer removed successfully! TX: ${txHash}`);
+                setSuccess(`Xóa officer thành công! TX: ${txHash}`);
             }
 
             setShowOfficerModal(false);
@@ -143,7 +143,7 @@ const AdminDashboard = () => {
             // Update database
             await apiRevokeCertificate(revokeTarget.certificateId, txHash);
 
-            setSuccess(`Certificate revoked successfully! TX: ${txHash}`);
+            setSuccess(`Thu hồi chứng chỉ thành công! TX: ${txHash}`);
             setShowRevokeModal(false);
             setRevokeTarget(null);
 
@@ -171,15 +171,15 @@ const AdminDashboard = () => {
                     <div className="container mx-auto px-4 py-6">
                         <Link to="/" className="inline-flex items-center gap-2 text-neutral-dark hover:text-primary">
                             <ArrowLeft size={20} />
-                            <span>Back to Home</span>
+                            <span>Về Trang Chủ</span>
                         </Link>
                     </div>
                 </header>
                 <main className="container mx-auto px-4 py-8">
                     <Card>
                         <div className="text-center py-8">
-                            <h2 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h2>
-                            <p className="text-neutral-gray">{error || 'You do not have admin privileges'}</p>
+                            <h2 className="text-2xl font-bold text-red-600 mb-4">Truy Cập Bị Từ Chối</h2>
+                            <p className="text-neutral-gray">{error || 'Bạn không có quyền admin'}</p>
                         </div>
                     </Card>
                 </main>
@@ -195,12 +195,12 @@ const AdminDashboard = () => {
                     <div className="flex items-center justify-between mb-4">
                         <Link to="/" className="inline-flex items-center gap-2 text-neutral-dark hover:text-primary">
                             <ArrowLeft size={20} />
-                            <span>Back to Home</span>
+                            <span>Về Trang Chủ</span>
                         </Link>
                         <MetaMaskConnect />
                     </div>
-                    <h1 className="text-3xl font-bold text-neutral-dark">Admin Dashboard</h1>
-                    <p className="text-neutral-gray mt-2">Manage officers and certificates</p>
+                    <h1 className="text-3xl font-bold text-neutral-dark">Bảng Điều Khiển Quản Trị</h1>
+                    <p className="text-neutral-gray mt-2">Quản lý officers và chứng chỉ</p>
                 </div>
             </header>
 
@@ -226,7 +226,7 @@ const AdminDashboard = () => {
                                     <FileText size={32} className="text-primary" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-neutral-gray">Total</p>
+                                    <p className="text-sm text-neutral-gray">Tổng Số</p>
                                     <p className="text-2xl font-bold">{stats.total}</p>
                                 </div>
                             </div>
@@ -238,7 +238,7 @@ const AdminDashboard = () => {
                                     <TrendingUp size={32} className="text-green-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-neutral-gray">Issued</p>
+                                    <p className="text-sm text-neutral-gray">Đã Cấp</p>
                                     <p className="text-2xl font-bold">{stats.issued}</p>
                                 </div>
                             </div>
@@ -250,7 +250,7 @@ const AdminDashboard = () => {
                                     <Trash2 size={32} className="text-red-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-neutral-gray">Revoked</p>
+                                    <p className="text-sm text-neutral-gray">Đã Thu Hồi</p>
                                     <p className="text-2xl font-bold">{stats.revoked}</p>
                                 </div>
                             </div>
@@ -262,7 +262,7 @@ const AdminDashboard = () => {
                                     <Loader size={32} className="text-yellow-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-neutral-gray">Pending</p>
+                                    <p className="text-sm text-neutral-gray">Đang Chờ</p>
                                     <p className="text-2xl font-bold">{stats.pending}</p>
                                 </div>
                             </div>
@@ -272,7 +272,7 @@ const AdminDashboard = () => {
 
                 {/* Officer Management */}
                 <Card className="mb-8">
-                    <h3 className="font-bold text-neutral-dark mb-4">Officer Management</h3>
+                    <h3 className="font-bold text-neutral-dark mb-4">Quản Lý Officers</h3>
                     <div className="flex gap-4">
                         <Button
                             onClick={() => {
@@ -280,7 +280,7 @@ const AdminDashboard = () => {
                                 setShowOfficerModal(true);
                             }}
                         >
-                            Add Officer
+                            Thêm Officer
                         </Button>
                         <Button
                             variant="outline"
@@ -289,24 +289,24 @@ const AdminDashboard = () => {
                                 setShowOfficerModal(true);
                             }}
                         >
-                            Remove Officer
+                            Xóa Officer
                         </Button>
                     </div>
                 </Card>
 
                 {/* Certificate List */}
                 <Card>
-                    <h3 className="font-bold text-neutral-dark mb-4">Certificates</h3>
+                    <h3 className="font-bold text-neutral-dark mb-4">Danh Sách Chứng Chỉ</h3>
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b-2 border-neutral-dark">
-                                    <th className="text-left py-3 px-2">ID</th>
-                                    <th className="text-left py-3 px-2">Student</th>
-                                    <th className="text-left py-3 px-2">Course</th>
-                                    <th className="text-left py-3 px-2">Status</th>
-                                    <th className="text-left py-3 px-2">Issued</th>
-                                    <th className="text-left py-3 px-2">Actions</th>
+                                    <th className="text-left py-3 px-2">Mã</th>
+                                    <th className="text-left py-3 px-2">Sinh Viên</th>
+                                    <th className="text-left py-3 px-2">Khóa Học</th>
+                                    <th className="text-left py-3 px-2">Trạng Thái</th>
+                                    <th className="text-left py-3 px-2">Ngày Cấp</th>
+                                    <th className="text-left py-3 px-2">Hành Động</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -320,10 +320,10 @@ const AdminDashboard = () => {
                                         <td className="py-3 px-2">
                                             <span
                                                 className={`px-2 py-1 text-xs border ${cert.status === 'ISSUED'
-                                                        ? 'border-green-500 text-green-700 bg-green-50'
-                                                        : cert.status === 'REVOKED'
-                                                            ? 'border-red-500 text-red-700 bg-red-50'
-                                                            : 'border-yellow-500 text-yellow-700 bg-yellow-50'
+                                                    ? 'border-green-500 text-green-700 bg-green-50'
+                                                    : cert.status === 'REVOKED'
+                                                        ? 'border-red-500 text-red-700 bg-red-50'
+                                                        : 'border-yellow-500 text-yellow-700 bg-yellow-50'
                                                     }`}
                                             >
                                                 {cert.status}
@@ -342,7 +342,7 @@ const AdminDashboard = () => {
                                                     }}
                                                     className="text-sm px-3 py-1"
                                                 >
-                                                    Revoke
+                                                    Thu Hồi
                                                 </Button>
                                             )}
                                         </td>
@@ -360,17 +360,17 @@ const AdminDashboard = () => {
                                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                                 disabled={page === 1}
                             >
-                                Previous
+                                Trước
                             </Button>
                             <span className="text-neutral-dark">
-                                Page {page} of {totalPages}
+                                Trang {page} / {totalPages}
                             </span>
                             <Button
                                 variant="outline"
                                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
                             >
-                                Next
+                                Sau
                             </Button>
                         </div>
                     )}
@@ -381,20 +381,20 @@ const AdminDashboard = () => {
             <Modal
                 isOpen={showOfficerModal}
                 onClose={() => setShowOfficerModal(false)}
-                title={officerAction === 'add' ? 'Add Officer' : 'Remove Officer'}
+                title={officerAction === 'add' ? 'Thêm Officer' : 'Xóa Officer'}
                 footer={
                     <>
                         <Button variant="outline" onClick={() => setShowOfficerModal(false)}>
-                            Cancel
+                            Hủy
                         </Button>
                         <Button onClick={handleOfficerAction} disabled={officerLoading}>
-                            {officerLoading ? 'Processing...' : officerAction === 'add' ? 'Add' : 'Remove'}
+                            {officerLoading ? 'Đang xử lý...' : officerAction === 'add' ? 'Thêm' : 'Xóa'}
                         </Button>
                     </>
                 }
             >
                 <Input
-                    label="Officer Address"
+                    label="Địa Chỉ Officer"
                     value={officerAddress}
                     onChange={(e) => setOfficerAddress(e.target.value)}
                     placeholder="0x..."
@@ -405,14 +405,14 @@ const AdminDashboard = () => {
             <Modal
                 isOpen={showRevokeModal}
                 onClose={() => setShowRevokeModal(false)}
-                title="Revoke Certificate"
+                title="Thu Hồi Chứng Chỉ"
                 footer={
                     <>
                         <Button variant="outline" onClick={() => setShowRevokeModal(false)}>
-                            Cancel
+                            Hủy
                         </Button>
                         <Button onClick={handleRevoke} disabled={revokeLoading}>
-                            {revokeLoading ? 'Revoking...' : 'Revoke'}
+                            {revokeLoading ? 'Đang thu hồi...' : 'Thu Hồi'}
                         </Button>
                     </>
                 }
@@ -420,12 +420,12 @@ const AdminDashboard = () => {
                 {revokeTarget && (
                     <div className="space-y-4">
                         <p className="text-neutral-dark">
-                            Are you sure you want to revoke this certificate? This action cannot be undone.
+                            Bạn có chắc chắn muốn thu hồi chứng chỉ này? Hành động này không thể hoàn tác.
                         </p>
                         <div className="border-t pt-4">
-                            <p><strong>Certificate ID:</strong> {revokeTarget.certificateId}</p>
-                            <p><strong>Student:</strong> {revokeTarget.studentName}</p>
-                            <p><strong>Course:</strong> {revokeTarget.courseName}</p>
+                            <p><strong>Mã chứng chỉ:</strong> {revokeTarget.certificateId}</p>
+                            <p><strong>Sinh viên:</strong> {revokeTarget.studentName}</p>
+                            <p><strong>Khóa học:</strong> {revokeTarget.courseName}</p>
                         </div>
                     </div>
                 )}

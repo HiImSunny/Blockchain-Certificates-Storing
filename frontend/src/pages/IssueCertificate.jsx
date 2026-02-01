@@ -31,7 +31,7 @@ const IssueCertificate = () => {
         studentId: '',
         courseName: '',
         courseCode: '',
-        trainingType: 'Online',
+        trainingType: 'Trực tuyến',
         duration: '',
         result: '',
         issuedAt: new Date().toISOString().split('T')[0],
@@ -110,12 +110,12 @@ const IssueCertificate = () => {
                 ...formData,
             });
 
-            setSuccess(`Certificate issued successfully! ID: ${uploadData.certificateId}`);
+            setSuccess(`Phát hành chứng chỉ thành công! Mã: ${uploadData.certificateId}`);
             setShowPreview(false);
 
-            // Redirect to certificate detail page after 2 seconds
+            // Redirect after 2 seconds
             setTimeout(() => {
-                navigate(`/certificate/${uploadData.certificateId}`);
+                navigate('/');
             }, 2000);
         } catch (err) {
             setError(err.message);
@@ -131,9 +131,9 @@ const IssueCertificate = () => {
                 <div className="container mx-auto px-4 py-6">
                     <Link to="/" className="inline-flex items-center gap-2 text-neutral-dark hover:text-primary mb-4">
                         <ArrowLeft size={20} />
-                        <span>Back to Home</span>
+                        <span>Về Trang Chủ</span>
                     </Link>
-                    <h1 className="text-3xl font-bold text-neutral-dark">Issue Certificate</h1>
+                    <h1 className="text-3xl font-bold text-neutral-dark">Phát Hành Chứng Chỉ</h1>
                 </div>
             </header>
 
@@ -142,9 +142,9 @@ const IssueCertificate = () => {
                 <Card className="mb-8">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="font-bold text-neutral-dark mb-1">Wallet Connection</h3>
+                            <h3 className="font-bold text-neutral-dark mb-1">Kết Nối Ví</h3>
                             <p className="text-sm text-neutral-gray">
-                                Connect your wallet to issue certificates on blockchain
+                                Kết nối ví MetaMask để phát hành chứng chỉ lên blockchain
                             </p>
                         </div>
                         <MetaMaskConnect />
@@ -153,19 +153,19 @@ const IssueCertificate = () => {
 
                 {/* Mode Selection */}
                 <Card className="mb-8">
-                    <h3 className="font-bold text-neutral-dark mb-4">Choose Input Method</h3>
+                    <h3 className="font-bold text-neutral-dark mb-4">Chọn Phương Thức Nhập</h3>
                     <div className="flex gap-4">
                         <Button
                             variant={mode === 'upload' ? 'primary' : 'outline'}
                             onClick={() => setMode('upload')}
                         >
-                            Upload File
+                            Tải File Lên
                         </Button>
                         <Button
                             variant={mode === 'manual' ? 'primary' : 'outline'}
                             onClick={() => setMode('manual')}
                         >
-                            Manual Input
+                            Nhập Thủ Công
                         </Button>
                     </div>
                 </Card>
@@ -173,12 +173,12 @@ const IssueCertificate = () => {
                 {/* Upload Mode */}
                 {mode === 'upload' && (
                     <Card>
-                        <h3 className="font-bold text-neutral-dark mb-4">Upload Certificate</h3>
+                        <h3 className="font-bold text-neutral-dark mb-4">Tải Lên Chứng Chỉ</h3>
                         <FileUpload onFileSelect={handleFileSelect} disabled={loading} />
                         {loading && (
                             <div className="flex items-center justify-center gap-2 mt-4">
                                 <Loader className="animate-spin" />
-                                <span>Processing file...</span>
+                                <span>Đang xử lý file...</span>
                             </div>
                         )}
                     </Card>
@@ -187,91 +187,91 @@ const IssueCertificate = () => {
                 {/* Form (shown for both modes after upload or for manual) */}
                 {((mode === 'upload' && uploadData) || mode === 'manual') && (
                     <Card className="mt-8">
-                        <h3 className="font-bold text-neutral-dark mb-4">Certificate Details</h3>
+                        <h3 className="font-bold text-neutral-dark mb-4">Thông Tin Chứng Chỉ</h3>
                         <div className="grid md:grid-cols-2 gap-4">
                             <Input
-                                label="Student Name"
+                                label="Tên Sinh Viên"
                                 value={formData.studentName}
                                 onChange={(e) => setFormData({ ...formData, studentName: e.target.value })}
                                 required
                             />
                             <Input
-                                label="Student ID"
+                                label="Mã Sinh Viên"
                                 value={formData.studentId}
                                 onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
                             />
                             <Input
-                                label="Course Name"
+                                label="Tên Khóa Học"
                                 value={formData.courseName}
                                 onChange={(e) => setFormData({ ...formData, courseName: e.target.value })}
                                 required
                             />
                             <Input
-                                label="Course Code"
+                                label="Mã Khóa Học"
                                 value={formData.courseCode}
                                 onChange={(e) => setFormData({ ...formData, courseCode: e.target.value })}
                             />
                             <div>
                                 <label className="text-sm font-medium text-neutral-dark block mb-1">
-                                    Training Type
+                                    Hình Thức Đào Tạo
                                 </label>
                                 <select
                                     value={formData.trainingType}
                                     onChange={(e) => setFormData({ ...formData, trainingType: e.target.value })}
                                     className="w-full px-4 py-2 border-2 border-neutral-dark bg-white"
                                 >
-                                    <option value="Online">Online</option>
-                                    <option value="Offline">Offline</option>
-                                    <option value="Hybrid">Hybrid</option>
+                                    <option value="Trực tuyến">Trực tuyến</option>
+                                    <option value="Trực tiếp">Trực tiếp</option>
+                                    <option value="Kết hợp">Kết hợp</option>
                                 </select>
                             </div>
                             <Input
-                                label="Duration"
+                                label="Thời Lượng"
                                 value={formData.duration}
                                 onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                                placeholder="e.g., 3 months, 120 hours"
+                                placeholder="VD: 3 tháng, 120 giờ"
                             />
                             <Input
-                                label="Result"
+                                label="Kết Quả"
                                 value={formData.result}
                                 onChange={(e) => setFormData({ ...formData, result: e.target.value })}
-                                placeholder="e.g., Pass, Distinction, 8.5/10"
+                                placeholder="VD: Đạt, Xuất sắc, 8.5/10"
                             />
                             <Input
-                                label="Issued Date"
+                                label="Ngày Cấp"
                                 type="date"
                                 value={formData.issuedAt}
                                 onChange={(e) => setFormData({ ...formData, issuedAt: e.target.value })}
                                 required
                             />
                             <Input
-                                label="Issuer Name"
+                                label="Tên Đơn Vị Cấp"
                                 value={formData.issuerName}
                                 onChange={(e) => setFormData({ ...formData, issuerName: e.target.value })}
                                 required
                             />
                             <Input
-                                label="Issuer Website"
+                                label="Website Đơn Vị"
                                 value={formData.issuerWebsite}
                                 onChange={(e) => setFormData({ ...formData, issuerWebsite: e.target.value })}
                             />
                             <Input
-                                label="Issuer Contact"
+                                label="Liên Hệ Đơn Vị"
                                 value={formData.issuerContact}
                                 onChange={(e) => setFormData({ ...formData, issuerContact: e.target.value })}
-                                placeholder="Email or phone"
+                                placeholder="Email hoặc số điện thoại"
                             />
                         </div>
 
                         <div className="flex gap-4 mt-6">
                             {mode === 'manual' && (
                                 <Button onClick={handleManualCreate} disabled={loading}>
-                                    {loading ? 'Generating PDF...' : 'Generate PDF Preview'}
+                                    {loading ? 'Đang tạo PDF...' : 'Tạo PDF Xem Trước'}
                                 </Button>
                             )}
                             {mode === 'upload' && uploadData && (
                                 <Button onClick={() => { setShowPreview(true); setPreviewData(uploadData); }}>
-                                    Preview & Issue
+                                    Xem Trước & Phát Hành
                                 </Button>
                             )}
                         </div>
@@ -295,14 +295,14 @@ const IssueCertificate = () => {
             <Modal
                 isOpen={showPreview}
                 onClose={() => setShowPreview(false)}
-                title="Certificate Preview"
+                title="Xem Trước Chứng Chỉ"
                 footer={
                     <>
                         <Button variant="outline" onClick={() => setShowPreview(false)}>
-                            Cancel
+                            Hủy
                         </Button>
                         <Button onClick={handleIssueToBlockchain} disabled={loading}>
-                            {loading ? 'Issuing...' : 'Issue to Blockchain'}
+                            {loading ? 'Đang phát hành...' : 'Phát Hành Lên Blockchain'}
                         </Button>
                     </>
                 }
@@ -310,7 +310,7 @@ const IssueCertificate = () => {
                 {previewData && (
                     <div className="space-y-4">
                         <div>
-                            <p className="text-sm text-neutral-gray">Certificate ID</p>
+                            <p className="text-sm text-neutral-gray">Mã Chứng Chỉ</p>
                             <p className="font-medium">{previewData.certificateId}</p>
                         </div>
                         <div>
@@ -325,14 +325,14 @@ const IssueCertificate = () => {
                                 rel="noopener noreferrer"
                                 className="text-primary underline text-sm"
                             >
-                                View Certificate
+                                Xem Chứng Chỉ
                             </a>
                         </div>
                         <div className="border-t pt-4">
-                            <p className="text-sm text-neutral-gray mb-2">Student Information</p>
-                            <p><strong>Name:</strong> {formData.studentName}</p>
-                            <p><strong>Course:</strong> {formData.courseName}</p>
-                            <p><strong>Issuer:</strong> {formData.issuerName}</p>
+                            <p className="text-sm text-neutral-gray mb-2">Thông Tin Sinh Viên</p>
+                            <p><strong>Tên:</strong> {formData.studentName}</p>
+                            <p><strong>Khóa học:</strong> {formData.courseName}</p>
+                            <p><strong>Đơn vị cấp:</strong> {formData.issuerName}</p>
                         </div>
                     </div>
                 )}

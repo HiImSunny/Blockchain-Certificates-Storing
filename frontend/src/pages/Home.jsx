@@ -1,29 +1,90 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FileCheck, Shield, Upload, Settings } from 'lucide-react';
+import { Shield, Upload, Settings, FileCheck, Search } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import Input from '../components/ui/Input';
+import FileUpload from '../components/FileUpload';
 import { getCurrentAccount } from '../utils/metamask';
-import { checkAdmin } from '../utils/api';
+import { checkAdmin, checkOfficer, verifyCertificateById, verifyCertificateByFile } from '../utils/api';
 
 const Home = () => {
+    const [account, setAccount] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isOfficer, setIsOfficer] = useState(false);
+
+    // Verify state
+    const [verifyMode, setVerifyMode] = useState('id'); // 'id' or 'file'
+    const [certId, setCertId] = useState('');
+    const [verifyFile, setVerifyFile] = useState(null);
+    const [verifying, setVerifying] = useState(false);
+    const [verifyResult, setVerifyResult] = useState(null);
+    const [verifyError, setVerifyError] = useState(null);
 
     useEffect(() => {
-        const checkAdminStatus = async () => {
-            try {
-                const account = await getCurrentAccount();
-                if (account) {
-                    const result = await checkAdmin(account);
-                    setIsAdmin(result.isAdmin);
-                }
-            } catch (error) {
-                console.error('Check admin error:', error);
+        checkUserRole();
+
+        // Listen for account changes
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', checkUserRole);
+        }
+
+        return () => {
+            if (window.ethereum) {
+                window.ethereum.removeListener('accountsChanged', checkUserRole);
             }
         };
-
-        checkAdminStatus();
     }, []);
+
+    const checkUserRole = async () => {
+        try {
+            const currentAccount = await getCurrentAccount();
+            if (currentAccount) {
+                setAccount(currentAccount);
+                const [adminResult, officerResult] = await Promise.all([
+                    checkAdmin(currentAccount),
+                    checkOfficer(currentAccount)
+                ]);
+                setIsAdmin(adminResult.isAdmin);
+                setIsOfficer(officerResult.isOfficer || adminResult.isAdmin);
+            } else {
+                setAccount(null);
+                setIsAdmin(false);
+                setIsOfficer(false);
+            }
+        } catch (error) {
+            console.error('Lỗi kiểm tra quyền:', error);
+        }
+    };
+
+    const handleVerify = async () => {
+        setVerifying(true);
+        setVerifyError(null);
+        setVerifyResult(null);
+
+        try {
+            let result;
+            if (verifyMode === 'id') {
+                if (!certId.trim()) {
+                    setVerifyError('Vui lòng nhập mã chứng chỉ');
+                    return;
+                }
+                result = await verifyCertificateById(certId);
+            } else {
+                if (!verifyFile) {
+                    setVerifyError('Vui lòng chọn file chứng chỉ');
+                    return;
+                }
+                result = await verifyCertificateByFile(verifyFile);
+            }
+
+            setVerifyResult(result);
+        } catch (error) {
+            setVerifyError(error.response?.data?.error || error.message || 'Lỗi xác thực chứng chỉ');
+        } finally {
+            setVerifying(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-neutral-cream">
@@ -33,89 +94,157 @@ const Home = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <h1 className="text-3xl font-bold text-neutral-dark">
-                                Digital Certificate Storing by DNC
+                                Hệ Thống Chứng Chỉ Blockchain - DNC
                             </h1>
                             <p className="text-neutral-gray mt-2">
-                                Blockchain-powered certificate verification on Cronos
+                                Xác thực chứng chỉ an toàn, minh bạch trên Cronos Blockchain
                             </p>
                         </div>
-                        {isAdmin && (
-                            <Link to="/admin">
-                                <Button variant="outline" className="flex items-center gap-2">
-                                    <Settings size={20} />
-                                    Admin Dashboard
-                                </Button>
-                            </Link>
-                        )}
+                        <div className="flex items-center gap-4">
+                            {isOfficer && (
+                                <Link to="/issue">
+                                    <Button variant="outline" className="flex items-center gap-2">
+                                        <Upload size={20} />
+                                        Phát Hành
+                                    </Button>
+                                </Link>
+                            )}
+                            {isAdmin && (
+                                <Link to="/admin">
+                                    <Button variant="outline" className="flex items-center gap-2">
+                                        <Settings size={20} />
+                                        Quản Trị
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
 
-            {/* Hero Section */}
-            <main className="container mx-auto px-4 py-16">
-                <div className="max-w-4xl mx-auto text-center mb-16">
-                    <h2 className="text-4xl font-bold text-neutral-dark mb-4">
-                        Secure, Transparent, Immutable
-                    </h2>
-                    <p className="text-lg text-neutral-gray">
-                        Issue and verify educational certificates on the blockchain.
-                        Prevent fraud, ensure authenticity, and maintain trust.
-                    </p>
-                </div>
-
-                {/* Features */}
-                <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
-                    <Card>
-                        <div className="flex flex-col items-center text-center gap-4">
-                            <div className="p-4 border-2 border-primary">
-                                <Upload size={48} className="text-primary" />
-                            </div>
-                            <h3 className="text-xl font-bold text-neutral-dark">
-                                Issue Certificates
-                            </h3>
-                            <p className="text-neutral-gray">
-                                Upload existing certificates or create new ones with our
-                                template. AI-powered data extraction makes it easy.
-                            </p>
-                            <Link to="/issue" className="mt-4">
-                                <Button>Issue Certificate</Button>
-                            </Link>
+            <main className="container mx-auto px-4 py-8 max-w-4xl">
+                {/* Verify Section */}
+                <Card className="mb-8">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-3 border-2 border-primary">
+                            <Shield size={32} className="text-primary" />
                         </div>
-                    </Card>
-
-                    <Card>
-                        <div className="flex flex-col items-center text-center gap-4">
-                            <div className="p-4 border-2 border-primary">
-                                <Shield size={48} className="text-primary" />
-                            </div>
-                            <h3 className="text-xl font-bold text-neutral-dark">
-                                Verify Certificates
-                            </h3>
-                            <p className="text-neutral-gray">
-                                Instantly verify any certificate by ID or by uploading the
-                                file. Blockchain ensures tamper-proof verification.
-                            </p>
-                            <Link to="/verify" className="mt-4">
-                                <Button>Verify Certificate</Button>
-                            </Link>
+                        <div>
+                            <h2 className="text-2xl font-bold text-neutral-dark">Xác Thực Chứng Chỉ</h2>
+                            <p className="text-neutral-gray">Kiểm tra tính xác thực của chứng chỉ trên blockchain</p>
                         </div>
-                    </Card>
-                </div>
+                    </div>
+
+                    {/* Mode Selection */}
+                    <div className="flex gap-4 mb-6">
+                        <Button
+                            variant={verifyMode === 'id' ? 'primary' : 'outline'}
+                            onClick={() => {
+                                setVerifyMode('id');
+                                setVerifyResult(null);
+                                setVerifyError(null);
+                            }}
+                            className="flex-1"
+                        >
+                            <Search size={20} className="mr-2" />
+                            Theo Mã Chứng Chỉ
+                        </Button>
+                        <Button
+                            variant={verifyMode === 'file' ? 'primary' : 'outline'}
+                            onClick={() => {
+                                setVerifyMode('file');
+                                setVerifyResult(null);
+                                setVerifyError(null);
+                            }}
+                            className="flex-1"
+                        >
+                            <FileCheck size={20} className="mr-2" />
+                            Tải File Lên
+                        </Button>
+                    </div>
+
+                    {/* Verify by ID */}
+                    {verifyMode === 'id' && (
+                        <div className="space-y-4">
+                            <Input
+                                label="Mã Chứng Chỉ"
+                                value={certId}
+                                onChange={(e) => setCertId(e.target.value)}
+                                placeholder="Ví dụ: CERT-1738393200000-A1B2C3D4"
+                            />
+                            <Button onClick={handleVerify} disabled={verifying} className="w-full">
+                                {verifying ? 'Đang xác thực...' : 'Xác Thực'}
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Verify by File */}
+                    {verifyMode === 'file' && (
+                        <div className="space-y-4">
+                            <FileUpload
+                                onFileSelect={setVerifyFile}
+                                accept=".pdf,.jpg,.jpeg,.png"
+                            />
+                            <Button onClick={handleVerify} disabled={verifying || !verifyFile} className="w-full">
+                                {verifying ? 'Đang xác thực...' : 'Xác Thực'}
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Error */}
+                    {verifyError && (
+                        <div className="mt-4 p-4 border-2 border-red-500 bg-red-50 text-red-700">
+                            {verifyError}
+                        </div>
+                    )}
+
+                    {/* Result */}
+                    {verifyResult && (
+                        <div className="mt-6 p-6 border-2 border-green-500 bg-green-50">
+                            <h3 className="text-xl font-bold text-green-700 mb-4">
+                                ✅ Chứng Chỉ Hợp Lệ
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                                <p><strong>Mã chứng chỉ:</strong> {verifyResult.certificate.certificateId}</p>
+                                <p><strong>Tên sinh viên:</strong> {verifyResult.certificate.studentName}</p>
+                                <p><strong>Khóa học:</strong> {verifyResult.certificate.courseName}</p>
+                                <p><strong>Ngày cấp:</strong> {new Date(verifyResult.certificate.issuedAt).toLocaleDateString('vi-VN')}</p>
+                                <p><strong>Trạng thái:</strong>
+                                    <span className={`ml-2 px-2 py-1 text-xs border ${verifyResult.certificate.status === 'ISSUED'
+                                        ? 'border-green-500 bg-green-100 text-green-700'
+                                        : 'border-red-500 bg-red-100 text-red-700'
+                                        }`}>
+                                        {verifyResult.certificate.status === 'ISSUED' ? 'Đã Cấp' : 'Đã Thu Hồi'}
+                                    </span>
+                                </p>
+                                {verifyResult.certificate.fileUrl && (
+                                    <a
+                                        href={verifyResult.certificate.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-block mt-2 text-primary hover:underline"
+                                    >
+                                        📄 Tải xuống chứng chỉ
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </Card>
 
                 {/* How It Works */}
-                <Card className="max-w-4xl mx-auto">
+                <Card>
                     <h3 className="text-2xl font-bold text-neutral-dark mb-6 text-center">
-                        How It Works
+                        Cách Hoạt Động
                     </h3>
                     <div className="grid md:grid-cols-3 gap-8">
                         <div className="text-center">
                             <div className="w-12 h-12 border-2 border-primary bg-primary text-white flex items-center justify-center text-xl font-bold mx-auto mb-4">
                                 1
                             </div>
-                            <h4 className="font-bold text-neutral-dark mb-2">Upload or Create</h4>
+                            <h4 className="font-bold text-neutral-dark mb-2">Phát Hành</h4>
                             <p className="text-sm text-neutral-gray">
-                                Upload an existing certificate or fill in the form to generate
-                                a new one
+                                Tải lên hoặc tạo chứng chỉ mới với AI tự động trích xuất thông tin
                             </p>
                         </div>
 
@@ -124,11 +253,10 @@ const Home = () => {
                                 2
                             </div>
                             <h4 className="font-bold text-neutral-dark mb-2">
-                                Sign with MetaMask
+                                Ký Bằng MetaMask
                             </h4>
                             <p className="text-sm text-neutral-gray">
-                                Connect your wallet and sign the transaction to store the
-                                certificate hash on blockchain
+                                Kết nối ví và ký giao dịch để lưu hash chứng chỉ lên blockchain
                             </p>
                         </div>
 
@@ -137,11 +265,10 @@ const Home = () => {
                                 3
                             </div>
                             <h4 className="font-bold text-neutral-dark mb-2">
-                                Verify Anytime
+                                Xác Thực Bất Kỳ Lúc Nào
                             </h4>
                             <p className="text-sm text-neutral-gray">
-                                Anyone can verify the certificate's authenticity using the
-                                certificate ID or file
+                                Bất kỳ ai cũng có thể xác thực chứng chỉ bằng mã hoặc file
                             </p>
                         </div>
                     </div>
@@ -151,7 +278,7 @@ const Home = () => {
             {/* Footer */}
             <footer className="border-t-2 border-neutral-dark bg-white mt-16">
                 <div className="container mx-auto px-4 py-6 text-center text-neutral-gray">
-                    <p>© 2026 Digital Certificate Storing by DNC. Powered by Cronos Blockchain.</p>
+                    <p>© 2026 Hệ Thống Chứng Chỉ Blockchain - DNC. Powered by Cronos Blockchain.</p>
                 </div>
             </footer>
         </div>

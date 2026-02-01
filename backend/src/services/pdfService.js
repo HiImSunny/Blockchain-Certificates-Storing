@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 /**
- * Generate a certificate PDF with Vietnamese template
+ * Generate a certificate PDF (English template to avoid encoding issues)
  * @param {object} data - Certificate data
  * @returns {Promise<Buffer>} - PDF buffer
  */
@@ -13,7 +13,7 @@ export const generateCertificatePDF = async (data) => {
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage([842, 595]); // A4 landscape
 
-        // Load fonts
+        // Load fonts (StandardFonts only support ASCII/Latin characters)
         const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
         const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
@@ -44,7 +44,7 @@ export const generateCertificatePDF = async (data) => {
             borderWidth: 1,
         });
 
-        // Header - "Digital Certificate Storing by DNC"
+        // Header
         page.drawText('Digital Certificate Storing by DNC', {
             x: width / 2 - 180,
             y: height - 80,
@@ -53,8 +53,8 @@ export const generateCertificatePDF = async (data) => {
             color: primaryColor,
         });
 
-        // Title - "CHỨNG CHỈ / CERTIFICATE"
-        page.drawText('CHỨNG CHỈ', {
+        // Title
+        page.drawText('CERTIFICATE', {
             x: width / 2 - 80,
             y: height - 130,
             size: 32,
@@ -62,7 +62,7 @@ export const generateCertificatePDF = async (data) => {
             color: darkColor,
         });
 
-        page.drawText('CERTIFICATE', {
+        page.drawText('OF COMPLETION', {
             x: width / 2 - 70,
             y: height - 160,
             size: 18,
@@ -71,7 +71,7 @@ export const generateCertificatePDF = async (data) => {
         });
 
         // Certificate ID
-        page.drawText(`Mã số / ID: ${data.certificateId || 'N/A'}`, {
+        page.drawText(`Certificate ID: ${data.certificateId || 'N/A'}`, {
             x: width / 2 - 100,
             y: height - 190,
             size: 11,
@@ -83,8 +83,8 @@ export const generateCertificatePDF = async (data) => {
         let yPosition = height - 240;
 
         // Student name
-        page.drawText('Chứng nhận / This is to certify that', {
-            x: width / 2 - 120,
+        page.drawText('This is to certify that', {
+            x: width / 2 - 80,
             y: yPosition,
             size: 12,
             font: regularFont,
@@ -111,9 +111,8 @@ export const generateCertificatePDF = async (data) => {
         yPosition -= 50;
 
         // Course information
-        const courseText = `đã hoàn thành khóa học / has successfully completed the course`;
-        page.drawText(courseText, {
-            x: width / 2 - 200,
+        page.drawText('has successfully completed the course', {
+            x: width / 2 - 140,
             y: yPosition,
             size: 12,
             font: regularFont,
@@ -133,10 +132,10 @@ export const generateCertificatePDF = async (data) => {
 
         // Additional details
         const details = [
-            { label: 'Mã khóa học / Course Code:', value: data.courseCode || 'N/A' },
-            { label: 'Hình thức / Type:', value: data.trainingType || 'N/A' },
-            { label: 'Thời lượng / Duration:', value: data.duration || 'N/A' },
-            { label: 'Kết quả / Result:', value: data.result || 'N/A' },
+            { label: 'Course Code:', value: data.courseCode || 'N/A' },
+            { label: 'Training Type:', value: data.trainingType || 'N/A' },
+            { label: 'Duration:', value: data.duration || 'N/A' },
+            { label: 'Result:', value: data.result || 'N/A' },
         ];
 
         details.forEach((detail) => {
@@ -152,7 +151,7 @@ export const generateCertificatePDF = async (data) => {
 
         // Issuer information
         yPosition -= 20;
-        page.drawText(`Đơn vị cấp / Issued by: ${data.issuerName || 'N/A'}`, {
+        page.drawText(`Issued by: ${data.issuerName || 'N/A'}`, {
             x: 100,
             y: yPosition,
             size: 11,
@@ -173,7 +172,7 @@ export const generateCertificatePDF = async (data) => {
         }
 
         if (data.issuerContact) {
-            page.drawText(`Liên hệ / Contact: ${data.issuerContact}`, {
+            page.drawText(`Contact: ${data.issuerContact}`, {
                 x: 100,
                 y: yPosition,
                 size: 9,
@@ -184,10 +183,10 @@ export const generateCertificatePDF = async (data) => {
 
         // Date
         const issuedDate = data.issuedAt
-            ? new Date(data.issuedAt).toLocaleDateString('vi-VN')
-            : new Date().toLocaleDateString('vi-VN');
+            ? new Date(data.issuedAt).toLocaleDateString('en-US')
+            : new Date().toLocaleDateString('en-US');
 
-        page.drawText(`Ngày cấp / Issued on: ${issuedDate}`, {
+        page.drawText(`Issued on: ${issuedDate}`, {
             x: width - 250,
             y: 100,
             size: 10,
@@ -196,18 +195,10 @@ export const generateCertificatePDF = async (data) => {
         });
 
         // Footer - Blockchain verification note
-        page.drawText('Chứng chỉ này được xác thực trên Blockchain Cronos', {
-            x: width / 2 - 160,
-            y: 60,
-            size: 8,
-            font: italicFont,
-            color: lightColor,
-        });
-
         page.drawText('This certificate is verified on Cronos Blockchain', {
             x: width / 2 - 145,
-            y: 50,
-            size: 8,
+            y: 60,
+            size: 9,
             font: italicFont,
             color: lightColor,
         });

@@ -1,4 +1,14 @@
+import dotenv from 'dotenv';
 import { v2 as cloudinary } from 'cloudinary';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get current directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables from backend root
+dotenv.config({ path: join(__dirname, '../../.env') });
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

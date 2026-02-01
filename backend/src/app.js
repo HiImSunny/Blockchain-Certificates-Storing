@@ -32,15 +32,15 @@ app.use((err, req, res, next) => {
     console.error('Error:', err);
 
     if (err.name === 'MulterError') {
-        return res.status(400).json({ error: `Upload error: ${err.message}` });
+        return res.status(400).json({ error: `Lỗi tải lên: ${err.message}` });
     }
 
-    res.status(500).json({ error: err.message || 'Internal server error' });
+    res.status(500).json({ error: err.message || 'Lỗi máy chủ nội bộ' });
 });
 
 // 404 handler
 app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
+    res.status(404).json({ error: 'Không tìm thấy đường dẫn' });
 });
 
 export default app;
