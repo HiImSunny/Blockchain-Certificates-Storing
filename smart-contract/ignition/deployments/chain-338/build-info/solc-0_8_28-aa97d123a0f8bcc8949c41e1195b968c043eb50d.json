@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-aa97d123a0f8bcc8949c41e1195b968c043eb50d",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/EduCertificate.sol": "project/contracts/EduCertificate.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/EduCertificate.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.20;\r\n\r\ncontract EduCertificate {\r\n    address public admin;\r\n\r\n    struct Certificate {\r\n        uint256 certId;\r\n        address issuer;\r\n        bytes32 certHash;\r\n        uint256 issuedAt;\r\n        bool revoked;\r\n    }\r\n\r\n    mapping(uint256 => Certificate) private certificates;\r\n    mapping(address => bool) public officers;\r\n    uint256 public nextCertId = 1;\r\n\r\n    event OfficerAdded(address officer);\r\n    event OfficerRemoved(address officer);\r\n\r\n    event CertificateIssued(\r\n        uint256 indexed certId,\r\n        address indexed issuer,\r\n        bytes32 certHash\r\n    );\r\n\r\n    event CertificateUpdated(\r\n        uint256 indexed certId,\r\n        bytes32 newHash\r\n    );\r\n\r\n    event CertificateRevoked(uint256 indexed certId);\r\n\r\n    modifier onlyAdmin() {\r\n        require(msg.sender == admin, \"Only admin\");\r\n        _;\r\n    }\r\n\r\n    modifier onlyOfficerOrAdmin() {\r\n        require(\r\n            msg.sender == admin || officers[msg.sender],\r\n            \"Not authorized\"\r\n        );\r\n        _;\r\n    }\r\n\r\n    modifier onlyOwnerOfCert(uint256 certId) {\r\n        require(\r\n            certificates[certId].issuer == msg.sender ||\r\n                msg.sender == admin,\r\n            \"Not cert owner\"\r\n        );\r\n        _;\r\n    }\r\n\r\n    constructor(address _admin) {\r\n        admin = _admin;\r\n    }\r\n\r\n    function addOfficer(address officer) external onlyAdmin {\r\n        officers[officer] = true;\r\n        emit OfficerAdded(officer);\r\n    }\r\n\r\n    function removeOfficer(address officer) external onlyAdmin {\r\n        officers[officer] = false;\r\n        emit OfficerRemoved(officer);\r\n    }\r\n\r\n    function issueCertificate(bytes32 certHash)\r\n        external\r\n        onlyOfficerOrAdmin\r\n        returns (uint256)\r\n    {\r\n        uint256 certId = nextCertId;\r\n\r\n        certificates[certId] = Certificate({\r\n            certId: certId,\r\n            issuer: msg.sender,\r\n            certHash: certHash,\r\n            issuedAt: block.timestamp,\r\n            revoked: false\r\n        });\r\n\r\n        nextCertId++;\r\n\r\n        emit CertificateIssued(certId, msg.sender, certHash);\r\n        return certId;\r\n    }\r\n\r\n    function updateCertificate(uint256 certId, bytes32 newHash)\r\n        external\r\n        onlyOwnerOfCert(certId)\r\n    {\r\n        require(!certificates[certId].revoked, \"Certificate revoked\");\r\n        certificates[certId].certHash = newHash;\r\n\r\n        emit CertificateUpdated(certId, newHash);\r\n    }\r\n\r\n    function revokeCertificate(uint256 certId)\r\n        external\r\n        onlyOwnerOfCert(certId)\r\n    {\r\n        certificates[certId].revoked = true;\r\n        emit CertificateRevoked(certId);\r\n    }\r\n\r\n    function verifyCertificate(uint256 certId, bytes32 hashToVerify)\r\n        external\r\n        view\r\n        returns (bool valid, bool revoked)\r\n    {\r\n        Certificate memory cert = certificates[certId];\r\n\r\n        if (cert.certId == 0) {\r\n            return (false, false);\r\n        }\r\n\r\n        valid = cert.certHash == hashToVerify;\r\n        revoked = cert.revoked;\r\n    }\r\n\r\n    function getCertificate(uint256 certId)\r\n        external\r\n        view\r\n        returns (\r\n            address issuer,\r\n            bytes32 certHash,\r\n            uint256 issuedAt,\r\n            bool revoked\r\n        )\r\n    {\r\n        Certificate memory cert = certificates[certId];\r\n        return (\r\n            cert.issuer,\r\n            cert.certHash,\r\n            cert.issuedAt,\r\n            cert.revoked\r\n        );\r\n    }\r\n}\r\n"
+      }
+    }
+  }
+}
