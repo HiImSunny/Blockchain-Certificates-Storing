@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-neutral-cream text-neutral-dark font-sans;
+  }
+}
+
+@layer components {
+  /* Minimalist bordered components */
+  .border-box {
+    @apply border-2 border-neutral-dark;
+  }
+  
+  .border-box-light {
+    @apply border border-neutral-gray;
+  }
+}
