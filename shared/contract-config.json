@@ -1,0 +1,7 @@
+{
+    "contractAddress": "0xE6571C574050e40A2D052674896F3aB3F3baeE06",
+    "network": "cronos-testnet",
+    "chainId": 338,
+    "rpcUrl": "https://evm-t3.cronos.org",
+    "blockExplorer": "https://cronos.org/explorer/testnet3"
+}
