@@ -1,5 +1,5 @@
-import contractAbi from '../../../shared/contract-abi.json';
-import contractConfig from '../../../shared/contract-config.json';
+import contractAbi from './contract-abi.json';
+import contractConfig from './contract-config.json';
 
 export const CONTRACT_ADDRESS = contractConfig.contractAddress;
 export const CONTRACT_ABI = contractAbi.abi;
