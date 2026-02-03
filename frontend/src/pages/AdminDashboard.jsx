@@ -49,11 +49,18 @@ const AdminDashboard = () => {
         checkAdminAccess();
     }, []);
 
+    // Re-check when account changes (MetaMask connection)
+    useEffect(() => {
+        if (account && !isAdmin) {
+            checkAdminAccess();
+        }
+    }, [account]);
+
     const checkAdminAccess = async () => {
         try {
             const currentAccount = await getCurrentAccount();
             if (!currentAccount) {
-                setError('Vui lòng kết nối MetaMask trước');
+                // Don't set error - let the UI show MetaMask connect button
                 setLoading(false);
                 return;
             }
@@ -175,11 +182,28 @@ const AdminDashboard = () => {
                         </Link>
                     </div>
                 </header>
-                <main className="container mx-auto px-4 py-8">
+                <main className="container mx-auto px-4 py-8 max-w-2xl">
                     <Card>
                         <div className="text-center py-8">
-                            <h2 className="text-2xl font-bold text-red-600 mb-4">Truy Cập Bị Từ Chối</h2>
-                            <p className="text-neutral-gray">{error || 'Bạn không có quyền admin'}</p>
+                            {error ? (
+                                <>
+                                    <h2 className="text-2xl font-bold text-red-600 mb-4">Truy Cập Bị Từ Chối</h2>
+                                    <p className="text-neutral-gray mb-6">{error}</p>
+                                </>
+                            ) : (
+                                <>
+                                    <h2 className="text-2xl font-bold text-neutral-dark mb-4">Trang Quản Trị</h2>
+                                    <p className="text-neutral-gray mb-6">
+                                        Vui lòng kết nối ví MetaMask để truy cập trang quản trị
+                                    </p>
+                                    <div className="flex justify-center">
+                                        <MetaMaskConnect />
+                                    </div>
+                                    <p className="text-sm text-neutral-gray mt-4">
+                                        Sau khi kết nối, trang sẽ tự động kiểm tra quyền admin của bạn
+                                    </p>
+                                </>
+                            )}
                         </div>
                     </Card>
                 </main>
@@ -219,7 +243,7 @@ const AdminDashboard = () => {
 
                 {/* Statistics */}
                 {stats && (
-                    <div className="grid md:grid-cols-4 gap-6 mb-8">
+                    <div className="grid md:grid-cols-3 gap-6 mb-8">
                         <Card>
                             <div className="flex items-center gap-4">
                                 <div className="p-3 border-2 border-primary">
@@ -256,17 +280,7 @@ const AdminDashboard = () => {
                             </div>
                         </Card>
 
-                        <Card>
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 border-2 border-yellow-500">
-                                    <Loader size={32} className="text-yellow-500" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-neutral-gray">Đang Chờ</p>
-                                    <p className="text-2xl font-bold">{stats.pending}</p>
-                                </div>
-                            </div>
-                        </Card>
+
                     </div>
                 )}
 

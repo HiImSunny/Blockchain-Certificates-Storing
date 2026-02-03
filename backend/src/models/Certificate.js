@@ -90,8 +90,8 @@ const certificateSchema = new mongoose.Schema(
         // Status
         status: {
             type: String,
-            enum: ['PENDING', 'ISSUED', 'REVOKED'],
-            default: 'PENDING',
+            enum: ['ISSUED', 'REVOKED'],
+            default: 'ISSUED',
             index: true,
         },
         issuedAt: {

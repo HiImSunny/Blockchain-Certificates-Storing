@@ -68,7 +68,6 @@ export const getStats = async (req, res) => {
         const total = await Certificate.countDocuments();
         const issued = await Certificate.countDocuments({ status: 'ISSUED' });
         const revoked = await Certificate.countDocuments({ status: 'REVOKED' });
-        const pending = await Certificate.countDocuments({ status: 'PENDING' });
 
         res.json({
             success: true,
@@ -76,7 +75,6 @@ export const getStats = async (req, res) => {
                 total,
                 issued,
                 revoked,
-                pending,
             },
         });
     } catch (error) {
