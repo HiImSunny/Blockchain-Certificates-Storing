@@ -1,9 +1,14 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
- * Generate a certificate PDF (English template to avoid encoding issues)
+ * Generate a certificate PDF (Supports Unicode/Vietnamese)
  * @param {object} data - Certificate data
  * @returns {Promise<Buffer>} - PDF buffer
  */
@@ -11,12 +16,22 @@ export const generateCertificatePDF = async (data) => {
     try {
         // Create a new PDF document
         const pdfDoc = await PDFDocument.create();
-        const page = pdfDoc.addPage([842, 595]); // A4 landscape
+        pdfDoc.registerFontkit(fontkit);
 
-        // Load fonts (StandardFonts only support ASCII/Latin characters)
-        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+        // Construct paths to font files correctly relative to this file
+        // Current file is in: src/services/
+        // Fonts are in: src/assets/fonts/
+        const fontsPath = join(__dirname, '..', 'assets', 'fonts');
+
+        const regularFontBytes = readFileSync(join(fontsPath, 'Roboto-Regular.ttf'));
+        const boldFontBytes = readFileSync(join(fontsPath, 'Roboto-Bold.ttf'));
+        const italicFontBytes = readFileSync(join(fontsPath, 'Roboto-Italic.ttf'));
+
+        const regularFont = await pdfDoc.embedFont(regularFontBytes);
+        const boldFont = await pdfDoc.embedFont(boldFontBytes);
+        const italicFont = await pdfDoc.embedFont(italicFontBytes);
+
+        const page = pdfDoc.addPage([842, 595]); // A4 landscape
 
         const { width, height } = page.getSize();
 

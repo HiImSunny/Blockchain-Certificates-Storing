@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Loader, Shield } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -51,6 +51,25 @@ const VerifyCertificate = () => {
             setError(err.response?.data?.error || err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDownload = async (url, filename) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename || 'certificate.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            // Fallback to opening in new tab
+            window.open(url, '_blank');
         }
     };
 
@@ -139,8 +158,8 @@ const VerifyCertificate = () => {
                     <div className="mt-8">
                         {/* Status Banner */}
                         <div className={`p-6 border-2 mb-6 ${isValid
-                                ? 'border-green-500 bg-green-50'
-                                : 'border-red-500 bg-red-50'
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-red-500 bg-red-50'
                             }`}>
                             <div className="flex items-center gap-3">
                                 {isValid ? (
@@ -223,38 +242,118 @@ const VerifyCertificate = () => {
                             </div>
 
                             <div className="mt-6 flex gap-4">
-                                <a
-                                    href={result.certificate.fileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <Button
+                                    onClick={() => handleDownload(
+                                        result.certificate.fileUrl,
+                                        `certificate-${result.certificate.certificateId}.png`
+                                    )}
                                 >
-                                    <Button>Download Certificate</Button>
-                                </a>
+                                    Download Certificate ⬇️
+                                </Button>
                             </div>
                         </Card>
 
                         {/* Blockchain Verification */}
                         {result.blockchain?.data && (
-                            <Card title="Blockchain Verification" className="mt-6">
+                            <Card className="mt-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Shield className="text-blue-600" size={24} />
+                                    <h3 className="text-xl font-bold text-neutral-dark">
+                                        Blockchain Verification
+                                    </h3>
+                                </div>
+
+                                <div className="p-4 bg-blue-50 border-2 border-blue-200 mb-4">
+                                    <p className="text-sm text-blue-700">
+                                        <strong>🔗 Verified on Cronos Blockchain</strong> - This certificate has been verified on a public,
+                                        transparent, and immutable blockchain. Anyone can verify this information independently.
+                                    </p>
+                                </div>
+
+                                {/* Hash Comparison - PROOF */}
+                                <div className="mb-4 p-4 bg-green-50 border-2 border-green-500">
+                                    <h4 className="font-bold text-green-700 mb-3 flex items-center gap-2">
+                                        ✓ Proof: Hash Match Verification (Keccak-256)
+                                    </h4>
+                                    <div className="space-y-3 text-sm">
+                                        <div>
+                                            <p className="text-green-700 font-medium mb-1">
+                                                📄 Keccak-256 Hash of this certificate file:
+                                            </p>
+                                            <p className="font-mono text-xs break-all bg-white p-2 border border-green-400">
+                                                {result.certificate.certHash}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center justify-center">
+                                            <div className="text-2xl text-green-600">⬇️</div>
+                                        </div>
+                                        <div>
+                                            <p className="text-green-700 font-medium mb-1">
+                                                🔗 Keccak-256 Hash stored on Blockchain:
+                                            </p>
+                                            <p className="font-mono text-xs break-all bg-white p-2 border border-green-400">
+                                                {result.blockchain.data.certHash}
+                                            </p>
+                                        </div>
+                                        <div className="pt-2 border-t border-green-400">
+                                            <p className="text-xs text-green-800 font-medium">
+                                                {result.certificate.certHash === result.blockchain.data.certHash ? (
+                                                    <>
+                                                        ✅ <strong>MATCH!</strong> Both hashes are identical, proving that this file
+                                                        is exactly the same file stored on the blockchain. The transaction cannot be faked!
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        ❌ <strong>MISMATCH!</strong> Hashes don't match - the file may have been altered!
+                                                    </>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-sm text-neutral-gray">Issuer Address</p>
-                                        <p className="font-mono text-xs break-all">
+                                        <p className="text-sm text-neutral-gray">Issuer Address (Blockchain)</p>
+                                        <p className="font-mono text-xs break-all bg-neutral-cream p-2 border border-neutral-dark mt-1">
                                             {result.blockchain.data.issuer}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-sm text-neutral-gray">Blockchain Timestamp</p>
-                                        <p className="font-medium">
+                                        <p className="font-medium bg-neutral-cream p-2 border border-neutral-dark mt-1">
                                             {new Date(result.blockchain.data.issuedAt * 1000).toLocaleString()}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-neutral-gray">Revoked</p>
-                                        <p className="font-medium">
+                                        <p className="text-sm text-neutral-gray">Revoked Status</p>
+                                        <p className="font-medium bg-neutral-cream p-2 border border-neutral-dark mt-1">
                                             {result.blockchain.data.revoked ? 'Yes' : 'No'}
                                         </p>
                                     </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Transaction Hash</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="font-mono text-xs break-all bg-neutral-cream p-2 border border-neutral-dark flex-1">
+                                                {result.certificate.txHash?.slice(0, 20)}...
+                                            </p>
+                                            <a
+                                                href={`https://explorer.cronos.org/testnet/tx/${result.certificate.txHash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-3 py-2 bg-primary text-white text-xs hover:bg-opacity-90 whitespace-nowrap border-2 border-neutral-dark"
+                                            >
+                                                View on Explorer 🔍
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-300">
+                                    <p className="text-xs text-yellow-800">
+                                        💡 <strong>Transparency Note:</strong> Click "View on Explorer" to see this transaction on the public Cronos blockchain.
+                                        You can independently verify that the cert hash in the transaction matches the cert hash of this file.
+                                    </p>
                                 </div>
                             </Card>
                         )}

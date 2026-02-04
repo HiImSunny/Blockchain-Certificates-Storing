@@ -87,7 +87,7 @@ const IssueCertificate = () => {
             const query = {
                 page,
                 limit: 10,
-                issuerAddress: account,
+                issuerAddress: account.toLowerCase(), // Normalize to lowercase
             };
 
             if (statusFilter !== 'all') {
@@ -162,7 +162,7 @@ const IssueCertificate = () => {
                 certificateId: uploadData.certificateId,
                 certHash: uploadData.certHash,
                 txHash,
-                issuerAddress: address,
+                issuerAddress: address.toLowerCase(), // Normalize to lowercase
                 blockchainCertId: certId,
                 fileUrl: uploadData.fileUrl,
                 cloudinaryPublicId: uploadData.cloudinaryPublicId,
@@ -497,8 +497,8 @@ const IssueCertificate = () => {
                                                                 <td className="py-3 px-2">
                                                                     <span
                                                                         className={`px-2 py-1 text-xs border ${cert.status === 'ISSUED'
-                                                                                ? 'border-green-500 text-green-700 bg-green-50'
-                                                                                : 'border-red-500 text-red-700 bg-red-50'
+                                                                            ? 'border-green-500 text-green-700 bg-green-50'
+                                                                            : 'border-red-500 text-red-700 bg-red-50'
                                                                             }`}
                                                                     >
                                                                         {cert.status === 'ISSUED' ? 'Đã Cấp' : 'Đã Thu Hồi'}

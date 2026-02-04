@@ -26,6 +26,7 @@ const certificateSchema = new mongoose.Schema(
         issuerAddress: {
             type: String,
             required: true,
+            lowercase: true, // Normalize to lowercase for consistent comparison
         },
 
         // File storage

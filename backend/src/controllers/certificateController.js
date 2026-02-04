@@ -151,7 +151,7 @@ export const confirmCertificate = async (req, res) => {
             certificateId,
             certHash,
             txHash,
-            issuerAddress,
+            issuerAddress: issuerAddress.toLowerCase(),
             blockchainCertId,
             fileUrl,
             cloudinaryPublicId,
@@ -368,7 +368,7 @@ export const listCertificates = async (req, res) => {
 
         const query = {};
         if (status) query.status = status;
-        if (issuerAddress) query.issuerAddress = issuerAddress;
+        if (issuerAddress) query.issuerAddress = issuerAddress.toLowerCase();
 
         const certificates = await Certificate.find(query)
             .sort({ createdAt: -1 })
