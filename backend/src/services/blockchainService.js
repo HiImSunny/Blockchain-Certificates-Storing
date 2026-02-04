@@ -1,39 +1,99 @@
-import { contract } from '../config/blockchain.js';
+import { contract, provider } from '../config/blockchain.js';
+export { contract, provider };
 
 /**
- * Verify a certificate on the blockchain
- * @param {number} certId - Certificate ID from blockchain
- * @param {string} certHash - Certificate hash to verify
- * @returns {Promise<{valid: boolean, revoked: boolean}>}
+ * Retry helper for blockchain operations
+ * @param {Function} operation - Async function to retry
+ * @param {number} - Number of retries (default 3)
+ * @param {number} - Delay in ms (default 1000)
  */
-export const verifyCertificate = async (certId, certHash) => {
+const withRetry = async (operation, retries = 3, delay = 5000) => {
     try {
-        const [valid, revoked] = await contract.verifyCertificate(certId, certHash);
-        return { valid, revoked };
+        return await operation();
     } catch (error) {
-        console.error('Blockchain verification error:', error);
-        throw new Error('Failed to verify certificate on blockchain');
+        if (retries <= 0) throw error;
+        console.warn(`Blockchain operation failed, retrying in ${delay}ms... (${retries} left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return withRetry(operation, retries - 1, delay);
     }
 };
 
 /**
  * Get certificate details from blockchain
  * @param {number} certId - Certificate ID
- * @returns {Promise<{issuer: string, certHash: string, issuedAt: number, revoked: boolean}>}
+ * @returns {Promise<object>}
  */
 export const getCertificateFromBlockchain = async (certId) => {
     try {
-        const [issuer, certHash, issuedAt, revoked] = await contract.getCertificate(certId);
+        const cert = await withRetry(() => contract.getCertificate(certId));
 
+        // Convert struct array/object to standard JS object
         return {
-            issuer,
-            certHash,
-            issuedAt: Number(issuedAt),
-            revoked,
+            certId: Number(cert.certId),
+            issuer: cert.issuer,
+            certHash: cert.certHash,
+            certificateId: cert.certificateIdString,
+            studentName: cert.studentName,
+            courseName: cert.courseName,
+            courseCode: cert.courseCode,
+            trainingType: cert.trainingType,
+            duration: cert.duration,
+            result: cert.result,
+            issuerName: cert.issuerName,
+            issuerWebsite: cert.issuerWebsite,
+            issuerContact: cert.issuerContact,
+            fileUrl: cert.fileUrl,
+            fileType: cert.fileType,
+            issuedAt: Number(cert.issuedAt),
+            revoked: cert.revoked,
+            revokeTxHash: cert.revokeTxHash
         };
     } catch (error) {
         console.error('Error fetching certificate from blockchain:', error);
         throw new Error('Failed to fetch certificate from blockchain');
+    }
+};
+
+/**
+ * Verify a certificate on the blockchain
+ * @param {number} certId - Certificate ID from blockchain
+ * @param {string} certHash - Certificate hash to verify
+ * @returns {Promise<{valid: boolean, revoked: boolean, certDetails: object}>}
+ */
+export const verifyCertificate = async (certId, certHash) => {
+    try {
+        const [valid, revoked, certDetails] = await withRetry(() =>
+            contract.verifyCertificate(certId, certHash)
+        );
+
+        let formattedDetails = null;
+        if (certDetails && certDetails.certId > 0) {
+            formattedDetails = {
+                certId: Number(certDetails.certId),
+                issuer: certDetails.issuer,
+                certHash: certDetails.certHash,
+                certificateId: certDetails.certificateIdString,
+                studentName: certDetails.studentName,
+                courseName: certDetails.courseName,
+                courseCode: certDetails.courseCode,
+                trainingType: certDetails.trainingType,
+                duration: certDetails.duration,
+                result: certDetails.result,
+                issuerName: certDetails.issuerName,
+                issuerWebsite: certDetails.issuerWebsite,
+                issuerContact: certDetails.issuerContact,
+                fileUrl: certDetails.fileUrl,
+                fileType: certDetails.fileType,
+                issuedAt: Number(certDetails.issuedAt),
+                revoked: certDetails.revoked,
+                revokeTxHash: certDetails.revokeTxHash
+            };
+        }
+
+        return { valid, revoked, certDetails: formattedDetails };
+    } catch (error) {
+        console.error('Blockchain verification error:', error);
+        throw new Error('Failed to verify certificate on blockchain');
     }
 };
 
@@ -44,7 +104,7 @@ export const getCertificateFromBlockchain = async (certId) => {
  */
 export const isAdmin = async (address) => {
     try {
-        const adminAddress = await contract.admin();
+        const adminAddress = await withRetry(() => contract.admin());
         return adminAddress.toLowerCase() === address.toLowerCase();
     } catch (error) {
         console.error('Error checking admin status:', error);
@@ -59,7 +119,7 @@ export const isAdmin = async (address) => {
  */
 export const isOfficer = async (address) => {
     try {
-        return await contract.officers(address);
+        return await withRetry(() => contract.officers(address));
     } catch (error) {
         console.error('Error checking officer status:', error);
         return false;

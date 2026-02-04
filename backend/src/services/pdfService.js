@@ -16,7 +16,8 @@ export const generateCertificatePDF = async (data) => {
     try {
         // Create a new PDF document
         const pdfDoc = await PDFDocument.create();
-        pdfDoc.registerFontkit(fontkit);
+        // Register fontkit (handle ESM/CJS interop)
+        pdfDoc.registerFontkit(fontkit.default || fontkit);
 
         // Construct paths to font files correctly relative to this file
         // Current file is in: src/services/
@@ -208,6 +209,14 @@ export const generateCertificatePDF = async (data) => {
             font: regularFont,
             color: darkColor,
         });
+
+        // Set metadata and dates for determinism
+        const creationDate = data.issuedAt ? new Date(data.issuedAt) : new Date();
+        pdfDoc.setCreationDate(creationDate);
+        pdfDoc.setModificationDate(creationDate);
+        pdfDoc.setTitle('Certificate');
+        pdfDoc.setAuthor('Blockchain Certificate System');
+        pdfDoc.setProducer('Blockchain Certificate System');
 
         // Footer - Blockchain verification note
         page.drawText('This certificate is verified on Cronos Blockchain', {

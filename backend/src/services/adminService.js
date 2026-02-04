@@ -27,7 +27,10 @@ export const isAdmin = async (address) => {
  */
 export const isOfficer = async (address) => {
     try {
-        return await contract.officers(address);
+        const officerData = await contract.officers(address);
+        // officerData is [name, address, addedAt, isActive]
+        // or Result object with .isActive property
+        return officerData.isActive;
     } catch (error) {
         console.error('Check officer error:', error);
         return false;
@@ -44,5 +47,25 @@ export const getAdminAddress = async () => {
     } catch (error) {
         console.error('Get admin address error:', error);
         throw error;
+    }
+};
+
+/**
+ * Get list of officers
+ * @returns {Promise<object[]>}
+ */
+export const getOfficersList = async () => {
+    try {
+        const officers = await contract.getOfficers();
+        // Map struct to JS object
+        return officers.map(o => ({
+            name: o.name,
+            address: o.officerAddress,
+            addedAt: Number(o.addedAt),
+            isActive: o.isActive
+        }));
+    } catch (error) {
+        console.error('Get officers list error:', error);
+        return [];
     }
 };
