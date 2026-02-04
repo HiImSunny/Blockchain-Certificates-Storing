@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, Upload, Settings, FileCheck, Search } from 'lucide-react';
+import {
+    Shield, Upload, Settings, FileCheck, Search,
+    ArrowLeft, CheckCircle, XCircle, Loader
+} from 'lucide-react';
+import { CONTRACT_ADDRESS } from '../config/contract';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -20,6 +24,7 @@ const Home = () => {
     const [verifying, setVerifying] = useState(false);
     const [verifyResult, setVerifyResult] = useState(null);
     const [verifyError, setVerifyError] = useState(null);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     useEffect(() => {
         checkUserRole();
@@ -87,7 +92,10 @@ const Home = () => {
     };
 
     const handleDownload = async (url, filename) => {
+        if (isDownloading) return;
+
         try {
+            setIsDownloading(true);
             const response = await fetch(url);
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
@@ -102,6 +110,8 @@ const Home = () => {
             console.error('Download failed:', error);
             // Fallback
             window.open(url, '_blank');
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -219,57 +229,135 @@ const Home = () => {
 
                     {/* Result */}
                     {verifyResult && (
-                        <div className="mt-6 space-y-4">
+                        <div className="mt-8">
                             {/* Status Banner */}
-                            <div className="p-6 border-2 border-green-500 bg-green-50">
-                                <h3 className="text-xl font-bold text-green-700 mb-4">
-                                    ✅ Chứng Chỉ Hợp Lệ
-                                </h3>
-                                <div className="space-y-2 text-sm">
-                                    <p><strong>Mã chứng chỉ:</strong> {verifyResult.certificate.certificateId}</p>
-                                    <p><strong>Tên sinh viên:</strong> {verifyResult.certificate.studentName}</p>
-                                    <p><strong>Khóa học:</strong> {verifyResult.certificate.courseName}</p>
-                                    <p><strong>Ngày cấp:</strong> {new Date(verifyResult.certificate.issuedAt).toLocaleDateString('vi-VN')}</p>
-                                    <p><strong>Trạng thái:</strong>
-                                        <span className={`ml-2 px-2 py-1 text-xs border ${verifyResult.certificate.status === 'ISSUED'
-                                            ? 'border-green-500 bg-green-100 text-green-700'
-                                            : 'border-red-500 bg-red-100 text-red-700'
-                                            }`}>
-                                            {verifyResult.certificate.status === 'ISSUED' ? 'Đã Cấp' : 'Đã Thu Hồi'}
-                                        </span>
-                                    </p>
-                                    {verifyResult.certificate.fileUrl && (
-                                        <button
-                                            onClick={() => handleDownload(
-                                                verifyResult.certificate.fileUrl,
-                                                `chung-chi-${verifyResult.certificate.certificateId}.png`
-                                            )}
-                                            className="inline-block mt-2 text-primary hover:underline bg-transparent border-none p-0 cursor-pointer text-left"
-                                        >
-                                            📄 Tải xuống chứng chỉ
-                                        </button>
+                            <div className={`p-6 border-2 mb-6 ${verifyResult.blockchain?.valid && verifyResult.certificate?.status === 'ISSUED'
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-red-500 bg-red-50'
+                                }`}>
+                                <div className="flex items-center gap-3">
+                                    {verifyResult.blockchain?.valid && verifyResult.certificate?.status === 'ISSUED' ? (
+                                        <>
+                                            <CheckCircle size={32} className="text-green-500" />
+                                            <div>
+                                                <h3 className="font-bold text-green-700">Chứng Chỉ Hợp Lệ</h3>
+                                                <p className="text-green-600">
+                                                    Chứng chỉ này là xác thực và đã được kiểm tra trên blockchain
+                                                </p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XCircle size={32} className="text-red-500" />
+                                            <div>
+                                                <h3 className="font-bold text-red-700">Chứng Chỉ Không Hợp Lệ</h3>
+                                                <p className="text-red-600">
+                                                    {verifyResult.certificate?.status === 'REVOKED'
+                                                        ? 'Chứng chỉ này đã bị thu hồi'
+                                                        : 'Không thể xác thực chứng chỉ này'}
+                                                </p>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Blockchain Verification Proof */}
-                            {verifyResult.blockchain?.valid && verifyResult.blockchain?.data && (
-                                <div className="p-6 border-2 border-blue-500 bg-blue-50">
+                            {/* Certificate Details */}
+                            <Card title="Chi Tiết Chứng Chỉ">
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Mã Chứng Chỉ</p>
+                                        <p className="font-medium">{verifyResult.certificate.certificateId}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Trạng Thái</p>
+                                        <p className="font-medium">
+                                            {verifyResult.certificate.status === 'ISSUED' ? 'Đã Cấp' : 'Đã Thu Hồi'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Tên Sinh Viên</p>
+                                        <p className="font-medium">{verifyResult.certificate.studentName}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Tên Khóa Học</p>
+                                        <p className="font-medium">{verifyResult.certificate.courseName}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Đơn Vị Cấp</p>
+                                        <p className="font-medium">{verifyResult.certificate.issuerName}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Ngày Cấp</p>
+                                        <p className="font-medium">
+                                            {new Date(verifyResult.certificate.issuedAt).toLocaleDateString('vi-VN')}
+                                        </p>
+                                    </div>
+                                    {verifyResult.certificate.result && (
+                                        <div>
+                                            <p className="text-sm text-neutral-gray">Kết Quả</p>
+                                            <p className="font-medium">{verifyResult.certificate.result}</p>
+                                        </div>
+                                    )}
+                                    {verifyResult.certificate.duration && (
+                                        <div>
+                                            <p className="text-sm text-neutral-gray">Thời Lượng</p>
+                                            <p className="font-medium">{verifyResult.certificate.duration}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="mt-6 pt-6 border-t border-neutral-gray">
+                                    <p className="text-sm text-neutral-gray mb-2">File Hash (Blockchain)</p>
+                                    <p className="font-mono text-xs break-all">{verifyResult.certificate.certHash}</p>
+                                </div>
+
+                                <div className="mt-4">
+                                    <p className="text-sm text-neutral-gray mb-2">Transaction Hash</p>
+                                    <p className="font-mono text-xs break-all">{verifyResult.certificate.txHash}</p>
+                                </div>
+
+                                <div className="mt-6 flex gap-4">
+                                    <Button
+                                        onClick={() => handleDownload(
+                                            verifyResult.certificate.fileUrl,
+                                            `chung-chi-${verifyResult.certificate.certificateId}.png`
+                                        )}
+                                        disabled={isDownloading}
+                                    >
+                                        {isDownloading ? (
+                                            <div className="flex items-center gap-2">
+                                                <Loader size={16} className="animate-spin" />
+                                                <span>Đang tải...</span>
+                                            </div>
+                                        ) : (
+                                            'Tải Xuống Chứng Chỉ ⬇️'
+                                        )}
+                                    </Button>
+                                </div>
+                            </Card>
+
+                            {/* Blockchain Verification */}
+                            {verifyResult.blockchain?.data && (
+                                <Card className="mt-6">
                                     <div className="flex items-center gap-2 mb-4">
                                         <Shield className="text-blue-600" size={24} />
-                                        <h3 className="text-xl font-bold text-blue-700">
-                                            🔗 Xác Thực Trên Blockchain
+                                        <h3 className="text-xl font-bold text-neutral-dark">
+                                            Xác Thực Blockchain
                                         </h3>
                                     </div>
-                                    <p className="text-sm text-blue-700 mb-4">
-                                        Chứng chỉ này đã được xác thực trên <strong>Cronos Blockchain</strong> - một blockchain công khai,
-                                        minh bạch và không thể thay đổi. Bất kỳ ai cũng có thể xác minh thông tin này.
-                                    </p>
+
+                                    <div className="p-4 bg-blue-50 border-2 border-blue-200 mb-4">
+                                        <p className="text-sm text-blue-700">
+                                            <strong>🔗 Đã xác thực trên Cronos Blockchain</strong> - Chứng chỉ này đã được xác thực trên blockchain công khai,
+                                            minh bạch và không thể thay đổi. Bất kỳ ai cũng có thể xác minh thông tin này độc lập.
+                                        </p>
+                                    </div>
 
                                     {/* Hash Comparison - PROOF */}
                                     <div className="mb-4 p-4 bg-green-50 border-2 border-green-500">
                                         <h4 className="font-bold text-green-700 mb-3 flex items-center gap-2">
-                                            ✓ Bằng Chứng: Hash Khớp Nhau (Keccak-256)
+                                            ✓ Bằng Chứng: Xác Thực Hash (Keccak-256)
                                         </h4>
                                         <div className="space-y-3 text-sm">
                                             <div>
@@ -295,12 +383,12 @@ const Home = () => {
                                                 <p className="text-xs text-green-800 font-medium">
                                                     {verifyResult.certificate.certHash === verifyResult.blockchain.data.certHash ? (
                                                         <>
-                                                            ✅ <strong>KHỚP!</strong> Hai hash giống hệt nhau, chứng minh rằng file này
-                                                            chính xác là file đã được lưu trên blockchain. Transaction không thể giả mạo!
+                                                            ✅ <strong>KHỚP!</strong> Hai mã hash giống hệt nhau, chứng minh rằng file này
+                                                            chính xác là file đã được lưu trên blockchain. Giao dịch không thể bị làm giả!
                                                         </>
                                                     ) : (
                                                         <>
-                                                            ❌ <strong>KHÔNG KHỚP!</strong> Hash không giống nhau - file có thể đã bị thay đổi!
+                                                            ❌ <strong>KHÔNG KHỚP!</strong> Mã hash không trùng khớp - file có thể đã bị chỉnh sửa!
                                                         </>
                                                     )}
                                                 </p>
@@ -308,43 +396,71 @@ const Home = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-3 text-sm">
+                                    <div className="grid md:grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-blue-600 font-medium">Địa chỉ đơn vị cấp (Blockchain):</p>
-                                            <p className="font-mono text-xs break-all bg-white p-2 border border-blue-300 mt-1">
+                                            <p className="text-sm text-neutral-gray">Địa chỉ Người Cấp (Blockchain)</p>
+                                            <p className="font-mono text-xs break-all bg-neutral-cream p-2 border border-neutral-dark mt-1">
                                                 {verifyResult.blockchain.data.issuer}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-blue-600 font-medium">Thời gian ghi trên Blockchain:</p>
-                                            <p className="bg-white p-2 border border-blue-300 mt-1">
+                                            <p className="text-sm text-neutral-gray">Thời gian ghi nhận (Timestamp)</p>
+                                            <p className="font-medium bg-neutral-cream p-2 border border-neutral-dark mt-1">
                                                 {new Date(verifyResult.blockchain.data.issuedAt * 1000).toLocaleString('vi-VN')}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-blue-600 font-medium">Transaction Hash:</p>
+                                            <p className="text-sm text-neutral-gray">Trạng thái thu hồi</p>
+                                            <p className="font-medium bg-neutral-cream p-2 border border-neutral-dark mt-1">
+                                                {verifyResult.blockchain.data.revoked ? 'Có (Đã thu hồi)' : 'Không (Hợp lệ)'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-neutral-gray">Transaction Hash</p>
                                             <div className="flex items-center gap-2 mt-1">
-                                                <p className="font-mono text-xs break-all bg-white p-2 border border-blue-300 flex-1">
-                                                    {verifyResult.certificate.txHash}
+                                                <p className="font-mono break-all bg-neutral-cream p-2 border border-neutral-dark flex-1">
+                                                    {verifyResult.certificate.txHash?.slice(0, 8)}...{verifyResult.certificate.txHash?.slice(-3)}
                                                 </p>
                                                 <a
                                                     href={`https://explorer.cronos.org/testnet/tx/${verifyResult.certificate.txHash}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="px-3 py-2 bg-blue-600 text-white text-xs hover:bg-blue-700 whitespace-nowrap"
+                                                    className="px-3 py-2 bg-primary text-white hover:bg-opacity-90 whitespace-nowrap border-2 border-neutral-dark flex items-center justify-center"
                                                 >
                                                     Xem trên Explorer 🔍
                                                 </a>
                                             </div>
                                         </div>
-                                        <div className="pt-3 border-t border-blue-300">
-                                            <p className="text-xs text-blue-600">
-                                                💡 <strong>Lưu ý:</strong> Click vào "Xem trên Explorer" để xem giao dịch trên blockchain công khai.
-                                                Bạn có thể tự mình verify rằng cert hash trong transaction khớp với cert hash của file này.
-                                            </p>
-                                        </div>
                                     </div>
-                                </div>
+                                    {verifyResult.certificate.status === 'REVOKED' && verifyResult.certificate.revokeTxHash && (
+                                        <div>
+                                            <p className="text-sm text-neutral-gray text-red-600 font-bold mt-4">Transaction Hash Thu Hồi</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <p className="font-mono break-all bg-red-50 p-2 border border-red-200 flex-1 text-red-700">
+                                                    {verifyResult.certificate.revokeTxHash?.slice(0, 25)}...{verifyResult.certificate.revokeTxHash?.slice(-3)}
+                                                </p>
+                                                <a
+                                                    href={`https://explorer.cronos.org/testnet/tx/${verifyResult.certificate.revokeTxHash}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-3 py-2 bg-red-600 text-white hover:bg-opacity-90 whitespace-nowrap border-2 border-neutral-dark flex items-center justify-center"
+                                                >
+                                                    Xem Lệnh Thu Hồi 🔍
+                                                </a>
+                                            </div>
+                                        </div>
+                                    )}
+
+
+
+
+                                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-300">
+                                        <p className="text-xs text-yellow-800">
+                                            💡 <strong>Ghi chú minh bạch:</strong> Nhấn "Xem trên Explorer" để kiểm tra giao dịch này trên blockchain Cronos công khai.
+                                            Bạn có thể tự mình xác minh rằng mã hash trong giao dịch khớp với mã hash của file này.
+                                        </p>
+                                    </div>
+                                </Card>
                             )}
                         </div>
                     )}
@@ -402,5 +518,7 @@ const Home = () => {
         </div>
     );
 };
+
+
 
 export default Home;
