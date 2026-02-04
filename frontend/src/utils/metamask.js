@@ -76,13 +76,31 @@ export const getContract = (signer) => {
 /**
  * Issue certificate on blockchain
  * @param {ethers.Signer} signer
- * @param {string} certHash
+ * @param {object} issueData
  * @returns {Promise<{txHash: string, certId: number}>}
  */
-export const issueCertificate = async (signer, certHash) => {
+export const issueCertificate = async (signer, issueData) => {
     try {
         const contract = getContract(signer);
-        const tx = await contract.issueCertificate(certHash);
+
+        // Ensure data matches struct:
+        // struct IssueData {
+        //     bytes32 certHash;
+        //     string certificateIdString;
+        //     string studentName;
+        //     string courseName;
+        //     string courseCode;
+        //     string trainingType;
+        //     string duration;
+        //     string result;
+        //     string issuerName;
+        //     string issuerWebsite;
+        //     string issuerContact;
+        //     string fileUrl;
+        //     string fileType;
+        // }
+
+        const tx = await contract.issueCertificate(issueData);
 
         console.log('Transaction sent:', tx.hash);
         const receipt = await tx.wait();
@@ -118,12 +136,13 @@ export const issueCertificate = async (signer, certHash) => {
  * Revoke certificate on blockchain
  * @param {ethers.Signer} signer
  * @param {number} certId
+ * @param {string} revokeTxHash - Reason or reference for revocation (stored as string)
  * @returns {Promise<string>} Transaction hash
  */
-export const revokeCertificate = async (signer, certId) => {
+export const revokeCertificate = async (signer, certId, revokeTxHash) => {
     try {
         const contract = getContract(signer);
-        const tx = await contract.revokeCertificate(certId);
+        const tx = await contract.revokeCertificate(certId, revokeTxHash || "");
         const receipt = await tx.wait();
         return receipt.hash;
     } catch (error) {
@@ -136,12 +155,13 @@ export const revokeCertificate = async (signer, certId) => {
  * Add officer to smart contract (admin only)
  * @param {ethers.Signer} signer
  * @param {string} officerAddress
+ * @param {string} name
  * @returns {Promise<string>} Transaction hash
  */
-export const addOfficer = async (signer, officerAddress) => {
+export const addOfficer = async (signer, officerAddress, name) => {
     try {
         const contract = getContract(signer);
-        const tx = await contract.addOfficer(officerAddress);
+        const tx = await contract.addOfficer(officerAddress, name);
         const receipt = await tx.wait();
         return receipt.hash;
     } catch (error) {

@@ -154,4 +154,13 @@ export const getStats = async () => {
     return response.data;
 };
 
+/**
+ * Get officer list
+ * @returns {Promise<object>}
+ */
+export const listOfficers = async () => {
+    const response = await adminApi.get('/officers');
+    return response.data;
+};
+
 export default api;
