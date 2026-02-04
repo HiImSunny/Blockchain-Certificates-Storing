@@ -1,14 +1,14 @@
 import dotenv from 'dotenv';
 import app from './app.js';
-import connectDB from './config/database.js';
+// import connectDB from './config/database.js';
 
 // Load environment variables first
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-connectDB();
+// MongoDB connection removed - using Blockchain only
+// connectDB();
 
 // Start server
 app.listen(PORT, () => {

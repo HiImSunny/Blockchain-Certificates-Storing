@@ -4,6 +4,7 @@ import {
     checkOfficer,
     getAdmin,
     getStats,
+    listOfficers,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -19,5 +20,8 @@ router.get('/admin-address', getAdmin);
 
 // Get statistics
 router.get('/stats', getStats);
+
+// Get officer list
+router.get('/officers', listOfficers);
 
 export default router;

@@ -64,6 +64,10 @@ const IssueCertificate = () => {
     const [revokeTarget, setRevokeTarget] = useState(null);
     const [revokeLoading, setRevokeLoading] = useState(false);
 
+    // View modal
+    const [showViewModal, setShowViewModal] = useState(false);
+    const [viewTarget, setViewTarget] = useState(null);
+
     useEffect(() => {
         checkAccount();
     }, []);
@@ -151,10 +155,27 @@ const IssueCertificate = () => {
             // Connect MetaMask
             const { signer, address } = await connectMetaMask();
 
+            // Dictionary of data to match struct IssueData
+            const issueData = {
+                certHash: uploadData.certHash,
+                certificateIdString: uploadData.certificateId,
+                studentName: formData.studentName,
+                courseName: formData.courseName,
+                courseCode: formData.courseCode || "",
+                trainingType: formData.trainingType || "",
+                duration: formData.duration || "",
+                result: formData.result || "",
+                issuerName: formData.issuerName,
+                issuerWebsite: formData.issuerWebsite || "",
+                issuerContact: formData.issuerContact || "",
+                fileUrl: uploadData.fileUrl,
+                fileType: uploadData.fileType || "application/pdf"
+            };
+
             // Issue certificate on blockchain
             const { txHash, certId } = await issueCertificate(
                 signer,
-                uploadData.certHash
+                issueData
             );
 
             // Confirm with backend
@@ -214,7 +235,7 @@ const IssueCertificate = () => {
             // Revoke on blockchain
             const txHash = await blockchainRevokeCertificate(
                 signer,
-                revokeTarget.blockchainCertId
+                revokeTarget.certId
             );
 
             // Update database
@@ -252,7 +273,7 @@ const IssueCertificate = () => {
                 </div>
             </header>
 
-            <main className="container mx-auto px-4 py-8 max-w-4xl">
+            <main className="container mx-auto px-4 py-8 max-w-6xl">
                 {/* Tab Navigation */}
                 <Card className="mb-8">
                     <div className="flex gap-4">
@@ -488,9 +509,9 @@ const IssueCertificate = () => {
                                                     </thead>
                                                     <tbody>
                                                         {certificates.map((cert) => (
-                                                            <tr key={cert._id} className="border-b border-neutral-gray">
+                                                            <tr key={cert.certId} className="border-b border-neutral-gray">
                                                                 <td className="py-3 px-2 font-mono text-xs">
-                                                                    {cert.certificateId.slice(0, 20)}...
+                                                                    {cert.certificateId}
                                                                 </td>
                                                                 <td className="py-3 px-2">{cert.studentName}</td>
                                                                 <td className="py-3 px-2">{cert.courseName}</td>
@@ -498,16 +519,28 @@ const IssueCertificate = () => {
                                                                     <span
                                                                         className={`px-2 py-1 text-xs border ${cert.status === 'ISSUED'
                                                                             ? 'border-green-500 text-green-700 bg-green-50'
-                                                                            : 'border-red-500 text-red-700 bg-red-50'
+                                                                            : cert.status === 'REVOKED'
+                                                                                ? 'border-red-500 text-red-700 bg-red-50'
+                                                                                : 'border-yellow-500 text-yellow-700 bg-yellow-50'
                                                                             }`}
                                                                     >
-                                                                        {cert.status === 'ISSUED' ? 'Đã Cấp' : 'Đã Thu Hồi'}
+                                                                        {cert.status}
                                                                     </span>
                                                                 </td>
                                                                 <td className="py-3 px-2 text-sm">
-                                                                    {new Date(cert.issuedAt).toLocaleDateString()}
+                                                                    {new Date(cert.issuedAt * 1000).toLocaleDateString()}
                                                                 </td>
-                                                                <td className="py-3 px-2">
+                                                                <td className="py-3 px-2 flex gap-2">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        onClick={() => {
+                                                                            setViewTarget(cert);
+                                                                            setShowViewModal(true);
+                                                                        }}
+                                                                        className="text-sm px-3 py-1"
+                                                                    >
+                                                                        Chi Tiết
+                                                                    </Button>
                                                                     {cert.status === 'ISSUED' && (
                                                                         <Button
                                                                             variant="outline"
@@ -515,7 +548,7 @@ const IssueCertificate = () => {
                                                                                 setRevokeTarget(cert);
                                                                                 setShowRevokeModal(true);
                                                                             }}
-                                                                            className="text-sm px-3 py-1"
+                                                                            className="text-sm px-3 py-1 text-red-600 border-red-200 hover:bg-red-50"
                                                                         >
                                                                             Thu Hồi
                                                                         </Button>
@@ -557,6 +590,65 @@ const IssueCertificate = () => {
                     </>
                 )}
             </main>
+
+            {/* View Modal */}
+            <Modal
+                isOpen={showViewModal}
+                onClose={() => setShowViewModal(false)}
+                title="Chi Tiết Chứng Chỉ"
+                footer={
+                    <Button onClick={() => setShowViewModal(false)}>Đóng</Button>
+                }
+            >
+                {viewTarget && (
+                    <div className="space-y-2 text-sm">
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Mã Chứng Chỉ:</span>
+                            <span className="col-span-2">{viewTarget.certificateId}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Sinh Viên:</span>
+                            <span className="col-span-2">{viewTarget.studentName}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Khóa Học:</span>
+                            <span className="col-span-2">{viewTarget.courseName}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Kết Quả:</span>
+                            <span className="col-span-2">{viewTarget.result}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Ngày Cấp:</span>
+                            <span className="col-span-2">{new Date(viewTarget.issuedAt).toLocaleString()}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Trạng Thái:</span>
+                            <span className={`col-span-2 font-bold ${viewTarget.status === 'ISSUED' ? 'text-green-600' : 'text-red-600'}`}>
+                                {viewTarget.status}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Blockchain ID:</span>
+                            <span className="col-span-2">{viewTarget.certId}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Issuance Tx Hash:</span>
+                            <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.txHash || "N/A"}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline">
+                                {viewTarget.txHash || "N/A"}
+                            </a>
+                        </div>
+                        {viewTarget.revokeTxHash && viewTarget.revokeTxHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
+                            <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                                <span className="font-bold text-neutral-gray">Revoke Tx Hash:</span>
+                                <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.revokeTxHash}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline">
+                                    {viewTarget.revokeTxHash}
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
 
             {/* Preview Modal */}
             <Modal
