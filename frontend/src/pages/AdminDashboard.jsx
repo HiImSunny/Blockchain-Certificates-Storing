@@ -11,6 +11,7 @@ import {
     getStats,
     listCertificates,
     revokeCertificate as apiRevokeCertificate,
+    listOfficers,
 } from '../utils/api';
 import {
     getCurrentAccount,
@@ -22,11 +23,13 @@ import {
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const [loading, setLoading] = useState(true);
+    const [checkingAuth, setCheckingAuth] = useState(true);
+    const [dataLoading, setDataLoading] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [account, setAccount] = useState(null);
     const [stats, setStats] = useState(null);
     const [certificates, setCertificates] = useState([]);
+    const [officers, setOfficers] = useState([]);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
 
@@ -34,12 +37,17 @@ const AdminDashboard = () => {
     const [showOfficerModal, setShowOfficerModal] = useState(false);
     const [officerAction, setOfficerAction] = useState('add'); // 'add' or 'remove'
     const [officerAddress, setOfficerAddress] = useState('');
+    const [officerName, setOfficerName] = useState('');
     const [officerLoading, setOfficerLoading] = useState(false);
 
     // Revoke modal
     const [showRevokeModal, setShowRevokeModal] = useState(false);
     const [revokeTarget, setRevokeTarget] = useState(null);
     const [revokeLoading, setRevokeLoading] = useState(false);
+
+    // View modal
+    const [showViewModal, setShowViewModal] = useState(false);
+    const [viewTarget, setViewTarget] = useState(null);
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -61,7 +69,7 @@ const AdminDashboard = () => {
             const currentAccount = await getCurrentAccount();
             if (!currentAccount) {
                 // Don't set error - let the UI show MetaMask connect button
-                setLoading(false);
+                setCheckingAuth(false);
                 return;
             }
 
@@ -70,39 +78,49 @@ const AdminDashboard = () => {
             const adminCheck = await checkAdmin(currentAccount);
             if (!adminCheck.isAdmin) {
                 setError('Truy cập bị từ chối: Bạn không phải admin');
-                setLoading(false);
+                setCheckingAuth(false);
                 return;
             }
 
             setIsAdmin(true);
-            await loadData();
+            setCheckingAuth(false);
+
+            // Allow initial render, then fetch data
+            loadData();
         } catch (err) {
             setError(err.message);
-            setLoading(false);
+            setCheckingAuth(false);
         }
     };
 
     const loadData = async () => {
         try {
-            setLoading(true);
-            const [statsData, certsData] = await Promise.all([
+            setDataLoading(true);
+            const [statsData, certsData, officersData] = await Promise.all([
                 getStats(),
                 listCertificates({ page, limit: 10 }),
+                listOfficers(),
             ]);
 
             setStats(statsData.stats);
             setCertificates(certsData.certificates);
+            setOfficers(officersData.officers);
             setTotalPages(certsData.totalPages);
         } catch (err) {
             setError(err.message);
         } finally {
-            setLoading(false);
+            setDataLoading(false);
         }
     };
 
     const handleOfficerAction = async () => {
         if (!officerAddress.trim()) {
             setError('Vui lòng nhập địa chỉ officer');
+            return;
+        }
+
+        if (officerAction === 'add' && !officerName.trim()) {
+            setError('Vui lòng nhập tên officer');
             return;
         }
 
@@ -115,7 +133,7 @@ const AdminDashboard = () => {
 
             let txHash;
             if (officerAction === 'add') {
-                txHash = await blockchainAddOfficer(signer, officerAddress);
+                txHash = await blockchainAddOfficer(signer, officerAddress, officerName);
                 setSuccess(`Thêm officer thành công! TX: ${txHash}`);
             } else {
                 txHash = await blockchainRemoveOfficer(signer, officerAddress);
@@ -124,6 +142,9 @@ const AdminDashboard = () => {
 
             setShowOfficerModal(false);
             setOfficerAddress('');
+            setOfficerName('');
+            // Reload data after delay
+            setTimeout(loadData, 2000);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -144,7 +165,7 @@ const AdminDashboard = () => {
             // Revoke on blockchain
             const txHash = await blockchainRevokeCertificate(
                 signer,
-                revokeTarget.blockchainCertId
+                revokeTarget.certId
             );
 
             // Update database
@@ -163,7 +184,7 @@ const AdminDashboard = () => {
         }
     };
 
-    if (loading) {
+    if (checkingAuth) {
         return (
             <div className="min-h-screen bg-neutral-cream flex items-center justify-center">
                 <Loader className="animate-spin" size={48} />
@@ -242,151 +263,224 @@ const AdminDashboard = () => {
                 )}
 
                 {/* Statistics */}
-                {stats && (
-                    <div className="grid md:grid-cols-3 gap-6 mb-8">
-                        <Card>
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 border-2 border-primary">
-                                    <FileText size={32} className="text-primary" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-neutral-gray">Tổng Số</p>
-                                    <p className="text-2xl font-bold">{stats.total}</p>
-                                </div>
-                            </div>
-                        </Card>
-
-                        <Card>
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 border-2 border-green-500">
-                                    <TrendingUp size={32} className="text-green-500" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-neutral-gray">Đã Cấp</p>
-                                    <p className="text-2xl font-bold">{stats.issued}</p>
-                                </div>
-                            </div>
-                        </Card>
-
-                        <Card>
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 border-2 border-red-500">
-                                    <Trash2 size={32} className="text-red-500" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-neutral-gray">Đã Thu Hồi</p>
-                                    <p className="text-2xl font-bold">{stats.revoked}</p>
-                                </div>
-                            </div>
-                        </Card>
-
-
+                {dataLoading && !stats ? (
+                    <div className="flex justify-center py-8">
+                        <Loader className="animate-spin" size={32} />
                     </div>
+                ) : (
+                    stats && (
+                        <div className="grid md:grid-cols-3 gap-6 mb-8">
+                            <Card>
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 border-2 border-primary">
+                                        <FileText size={32} className="text-primary" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Tổng Số</p>
+                                        <p className="text-2xl font-bold">{stats.total}</p>
+                                    </div>
+                                </div>
+                            </Card>
+
+                            <Card>
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 border-2 border-green-500">
+                                        <TrendingUp size={32} className="text-green-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Đã Cấp</p>
+                                        <p className="text-2xl font-bold">{stats.issued}</p>
+                                    </div>
+                                </div>
+                            </Card>
+
+                            <Card>
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 border-2 border-red-500">
+                                        <Trash2 size={32} className="text-red-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-neutral-gray">Đã Thu Hồi</p>
+                                        <p className="text-2xl font-bold">{stats.revoked}</p>
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+                    )
                 )}
 
                 {/* Officer Management */}
                 <Card className="mb-8">
                     <h3 className="font-bold text-neutral-dark mb-4">Quản Lý Officers</h3>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 mb-6">
                         <Button
                             onClick={() => {
                                 setOfficerAction('add');
+                                setOfficerAddress('');
+                                setOfficerName('');
                                 setShowOfficerModal(true);
                             }}
                         >
                             Thêm Officer
                         </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setOfficerAction('remove');
-                                setShowOfficerModal(true);
-                            }}
-                        >
-                            Xóa Officer
-                        </Button>
                     </div>
+
+                    {dataLoading && officers.length === 0 ? (
+                        <div className="flex justify-center py-8">
+                            <Loader className="animate-spin" size={32} />
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b-2 border-neutral-dark">
+                                        <th className="text-left py-3 px-2">STT</th>
+                                        <th className="text-left py-3 px-2">Tên Officer</th>
+                                        <th className="text-left py-3 px-2">Địa Chỉ Ví</th>
+                                        <th className="text-left py-3 px-2">Hành Động</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {officers.length > 0 ? (
+                                        officers.filter(o => o.isActive).map((officer, index) => (
+                                            <tr key={index} className="border-b border-neutral-gray/10 hover:bg-neutral-gray/5">
+                                                <td className="py-2 px-2 text-sm text-neutral-dark">{index + 1}</td>
+                                                <td className="py-2 px-2 text-sm font-semibold text-neutral-dark bg-neutral-100 rounded-md px-2 w-fit">{officer.name}</td>
+                                                <td className="py-2 px-2 text-sm font-mono text-neutral-dark">{officer.address}</td>
+                                                <td className="py-2 px-2 text-sm">
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setOfficerAction('remove');
+                                                            setOfficerAddress(officer.address);
+                                                            setOfficerName(officer.name);
+                                                            setShowOfficerModal(true);
+                                                        }}
+                                                        className="text-red-600 border-red-200 hover:bg-red-50 text-xs px-2 py-1"
+                                                    >
+                                                        Xóa
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="4" className="py-4 text-center text-sm text-neutral-gray">
+                                                Chưa có officer nào được thêm
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </Card>
 
                 {/* Certificate List */}
                 <Card>
                     <h3 className="font-bold text-neutral-dark mb-4">Danh Sách Chứng Chỉ</h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b-2 border-neutral-dark">
-                                    <th className="text-left py-3 px-2">Mã</th>
-                                    <th className="text-left py-3 px-2">Sinh Viên</th>
-                                    <th className="text-left py-3 px-2">Khóa Học</th>
-                                    <th className="text-left py-3 px-2">Trạng Thái</th>
-                                    <th className="text-left py-3 px-2">Ngày Cấp</th>
-                                    <th className="text-left py-3 px-2">Hành Động</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {certificates.map((cert) => (
-                                    <tr key={cert._id} className="border-b border-neutral-gray">
-                                        <td className="py-3 px-2 font-mono text-xs">
-                                            {cert.certificateId.slice(0, 20)}...
-                                        </td>
-                                        <td className="py-3 px-2">{cert.studentName}</td>
-                                        <td className="py-3 px-2">{cert.courseName}</td>
-                                        <td className="py-3 px-2">
-                                            <span
-                                                className={`px-2 py-1 text-xs border ${cert.status === 'ISSUED'
-                                                    ? 'border-green-500 text-green-700 bg-green-50'
-                                                    : cert.status === 'REVOKED'
-                                                        ? 'border-red-500 text-red-700 bg-red-50'
-                                                        : 'border-yellow-500 text-yellow-700 bg-yellow-50'
-                                                    }`}
-                                            >
-                                                {cert.status}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-2 text-sm">
-                                            {new Date(cert.issuedAt).toLocaleDateString()}
-                                        </td>
-                                        <td className="py-3 px-2">
-                                            {cert.status === 'ISSUED' && (
-                                                <Button
-                                                    variant="outline"
-                                                    onClick={() => {
-                                                        setRevokeTarget(cert);
-                                                        setShowRevokeModal(true);
-                                                    }}
-                                                    className="text-sm px-3 py-1"
-                                                >
-                                                    Thu Hồi
-                                                </Button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-4 mt-6">
-                            <Button
-                                variant="outline"
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                            >
-                                Trước
-                            </Button>
-                            <span className="text-neutral-dark">
-                                Trang {page} / {totalPages}
-                            </span>
-                            <Button
-                                variant="outline"
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                            >
-                                Sau
-                            </Button>
+                    {dataLoading && certificates.length === 0 ? (
+                        <div className="flex justify-center py-8">
+                            <Loader className="animate-spin" size={32} />
                         </div>
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b-2 border-neutral-dark">
+                                            <th className="text-left py-3 px-2">Mã</th>
+                                            <th className="text-left py-3 px-2">Sinh Viên</th>
+                                            <th className="text-left py-3 px-2">Khóa Học</th>
+                                            <th className="text-left py-3 px-2">Trạng Thái</th>
+                                            <th className="text-left py-3 px-2">Ngày Cấp</th>
+                                            <th className="text-left py-3 px-2">Hành Động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {certificates.length > 0 ? (
+                                            certificates.map((cert) => (
+                                                <tr key={cert.certId} className="border-b border-neutral-gray">
+                                                    <td className="py-3 px-2 font-mono text-xs">
+                                                        {cert.certificateId}
+                                                    </td>
+                                                    <td className="py-3 px-2">{cert.studentName}</td>
+                                                    <td className="py-3 px-2">{cert.courseName}</td>
+                                                    <td className="py-3 px-2">
+                                                        <span
+                                                            className={`px-2 py-1 text-xs border ${cert.status === 'ISSUED'
+                                                                ? 'border-green-500 text-green-700 bg-green-50'
+                                                                : cert.status === 'REVOKED'
+                                                                    ? 'border-red-500 text-red-700 bg-red-50'
+                                                                    : 'border-yellow-500 text-yellow-700 bg-yellow-50'
+                                                                }`}
+                                                        >
+                                                            {cert.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-2 text-sm">
+                                                        {new Date(cert.issuedAt * 1000).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="py-3 px-2 flex gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setViewTarget(cert);
+                                                                setShowViewModal(true);
+                                                            }}
+                                                            className="text-sm px-3 py-1"
+                                                        >
+                                                            Chi Tiết
+                                                        </Button>
+                                                        {cert.status === 'ISSUED' && (
+                                                            <Button
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    setRevokeTarget(cert);
+                                                                    setShowRevokeModal(true);
+                                                                }}
+                                                                className="text-sm px-3 py-1 text-red-600 border-red-200 hover:bg-red-50"
+                                                            >
+                                                                Thu Hồi
+                                                            </Button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="6" className="py-8 text-center text-sm text-neutral-gray">
+                                                    Chưa có chứng chỉ nào
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-center gap-4 mt-6">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        disabled={page === 1}
+                                    >
+                                        Trước
+                                    </Button>
+                                    <span className="text-neutral-dark">
+                                        Trang {page} / {totalPages}
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={page === totalPages}
+                                    >
+                                        Sau
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </Card>
             </main>
@@ -401,18 +495,34 @@ const AdminDashboard = () => {
                         <Button variant="outline" onClick={() => setShowOfficerModal(false)}>
                             Hủy
                         </Button>
-                        <Button onClick={handleOfficerAction} disabled={officerLoading}>
+                        <Button onClick={handleOfficerAction} disabled={officerLoading} className={officerAction === 'remove' ? 'bg-red-600 hover:bg-red-700' : ''}>
                             {officerLoading ? 'Đang xử lý...' : officerAction === 'add' ? 'Thêm' : 'Xóa'}
                         </Button>
                     </>
                 }
             >
-                <Input
-                    label="Địa Chỉ Officer"
-                    value={officerAddress}
-                    onChange={(e) => setOfficerAddress(e.target.value)}
-                    placeholder="0x..."
-                />
+                <div className="space-y-4">
+                    {officerAction === 'add' && (
+                        <Input
+                            label="Tên Officer"
+                            value={officerName}
+                            onChange={(e) => setOfficerName(e.target.value)}
+                            placeholder="Nhập tên officer..."
+                        />
+                    )}
+                    <Input
+                        label="Địa Chỉ Officer"
+                        value={officerAddress}
+                        onChange={(e) => setOfficerAddress(e.target.value)}
+                        placeholder="0x..."
+                        disabled={officerAction === 'remove'}
+                    />
+                    {officerAction === 'remove' && (
+                        <p className="text-red-600 text-sm">
+                            Bạn có chắc chắn muốn xóa quyền officer của <strong>{officerName}</strong>?
+                        </p>
+                    )}
+                </div>
             </Modal>
 
             {/* Revoke Modal */}
@@ -441,6 +551,65 @@ const AdminDashboard = () => {
                             <p><strong>Sinh viên:</strong> {revokeTarget.studentName}</p>
                             <p><strong>Khóa học:</strong> {revokeTarget.courseName}</p>
                         </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* View Modal */}
+            <Modal
+                isOpen={showViewModal}
+                onClose={() => setShowViewModal(false)}
+                title="Chi Tiết Chứng Chỉ"
+                footer={
+                    <Button onClick={() => setShowViewModal(false)}>Đóng</Button>
+                }
+            >
+                {viewTarget && (
+                    <div className="space-y-2 text-sm">
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Mã Chứng Chỉ:</span>
+                            <span className="col-span-2">{viewTarget.certificateId}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Sinh Viên:</span>
+                            <span className="col-span-2">{viewTarget.studentName}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Khóa Học:</span>
+                            <span className="col-span-2">{viewTarget.courseName}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Kết Quả:</span>
+                            <span className="col-span-2">{viewTarget.result}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Ngày Cấp:</span>
+                            <span className="col-span-2">{new Date(viewTarget.issuedAt * 1000).toLocaleString()}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Trạng Thái:</span>
+                            <span className={`col-span-2 font-bold ${viewTarget.status === 'ISSUED' ? 'text-green-600' : 'text-red-600'}`}>
+                                {viewTarget.status}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Blockchain ID:</span>
+                            <span className="col-span-2">{viewTarget.certId}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                            <span className="font-bold text-neutral-gray">Tx Hash:</span>
+                            <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.txHash || "N/A"}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline">
+                                {viewTarget.txHash || "N/A"}
+                            </a>
+                        </div>
+                        {viewTarget.revokeTxHash && viewTarget.revokeTxHash !== '0x' && (
+                            <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                                <span className="font-bold text-neutral-gray">Revoke Tx Hash:</span>
+                                <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.revokeTxHash}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline">
+                                    {viewTarget.revokeTxHash}
+                                </a>
+                            </div>
+                        )}
                     </div>
                 )}
             </Modal>
