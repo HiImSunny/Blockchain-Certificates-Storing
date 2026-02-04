@@ -1,5 +1,5 @@
-import { isAdmin, isOfficer, getAdminAddress } from '../services/adminService.js';
-import Certificate from '../models/Certificate.js';
+import { isAdmin, isOfficer, getAdminAddress, getOfficersList } from '../services/adminService.js';
+import { contract } from '../services/blockchainService.js';
 
 /**
  * Check if address is admin
@@ -65,9 +65,12 @@ export const getAdmin = async (req, res) => {
  */
 export const getStats = async (req, res) => {
     try {
-        const total = await Certificate.countDocuments();
-        const issued = await Certificate.countDocuments({ status: 'ISSUED' });
-        const revoked = await Certificate.countDocuments({ status: 'REVOKED' });
+        // Fetch all certs from blockchain to count
+        const allCerts = await contract.getAllCertificates();
+
+        const total = allCerts.length;
+        const revoked = allCerts.filter(c => c.revoked).length;
+        const issued = total - revoked;
 
         res.json({
             success: true,
@@ -79,6 +82,23 @@ export const getStats = async (req, res) => {
         });
     } catch (error) {
         console.error('Get stats error:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+/**
+ * Get list of officers
+ * GET /api/admin/officers
+ */
+export const listOfficers = async (req, res) => {
+    try {
+        const officers = await getOfficersList();
+        res.json({
+            success: true,
+            officers,
+        });
+    } catch (error) {
+        console.error('Get officers list error:', error);
         res.status(500).json({ error: error.message });
     }
 };
