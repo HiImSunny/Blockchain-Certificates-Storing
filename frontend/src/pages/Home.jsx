@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import FileUpload from '../components/FileUpload';
+import MetaMaskConnect from '../components/MetaMaskConnect';
 import { getCurrentAccount } from '../utils/metamask';
 import { checkAdmin, checkOfficer, verifyCertificateById, verifyCertificateByFile } from '../utils/api';
 
@@ -130,6 +131,7 @@ const Home = () => {
                             </p>
                         </div>
                         <div className="flex items-center gap-4">
+                            <MetaMaskConnect />
                             {isOfficer && (
                                 <Link to="/issue">
                                     <Button variant="outline" className="flex items-center gap-2">
