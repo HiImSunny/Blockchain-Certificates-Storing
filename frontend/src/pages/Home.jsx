@@ -64,6 +64,8 @@ const Home = () => {
     };
 
     const handleVerify = async () => {
+        console.time("⏱️ Thời gian xác thực (Verify Time)");
+        const startTime = performance.now();
         setVerifying(true);
         setVerifyError(null);
         setVerifyResult(null);
@@ -75,19 +77,27 @@ const Home = () => {
                     setVerifyError('Vui lòng nhập mã chứng chỉ');
                     return;
                 }
+                console.log(`[Performance] Bắt đầu xác thực ID: ${certId}`);
                 result = await verifyCertificateById(certId);
             } else {
                 if (!verifyFile) {
                     setVerifyError('Vui lòng chọn file chứng chỉ');
                     return;
                 }
+                console.log(`[Performance] Bắt đầu xác thực File: ${verifyFile.name}`);
                 result = await verifyCertificateByFile(verifyFile);
             }
 
+            const endTime = performance.now();
+            const duration = (endTime - startTime).toFixed(2);
+            console.log(`✅ [Performance] Xác thực hoàn tất trong: ${duration}ms (${(duration / 1000).toFixed(2)}s)`);
+
             setVerifyResult(result);
         } catch (error) {
+            console.error('[Performance] Lỗi xác thực:', error);
             setVerifyError(error.response?.data?.error || error.message || 'Lỗi xác thực chứng chỉ');
         } finally {
+            console.timeEnd("⏱️ Thời gian xác thực (Verify Time)");
             setVerifying(false);
         }
     };

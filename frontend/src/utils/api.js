@@ -23,6 +23,33 @@ const adminApi = axios.create({
     },
 });
 
+// Performance Telemetry Interceptors
+const addTelemetry = (instance, name) => {
+    instance.interceptors.request.use((config) => {
+        config.metadata = { startTime: performance.now() };
+        return config;
+    });
+
+    instance.interceptors.response.use(
+        (response) => {
+            const duration = (performance.now() - response.config.metadata.startTime).toFixed(2);
+            console.groupCollapsed(`🚀 [API Speed] ${name} ${response.config.method.toUpperCase()} ${response.config.url} - ${duration}ms`);
+            console.log('Status:', response.status);
+            console.log('Data:', response.data);
+            console.groupEnd();
+            return response;
+        },
+        (error) => {
+            const duration = error.config ? (performance.now() - error.config.metadata.startTime).toFixed(2) : 'N/A';
+            console.error(`❌ [API Error] ${name} ${error.config?.url} - ${duration}ms`, error);
+            return Promise.reject(error);
+        }
+    );
+};
+
+addTelemetry(api, 'UserAPI');
+addTelemetry(adminApi, 'AdminAPI');
+
 /**
  * Upload certificate file
  * @param {File} file
