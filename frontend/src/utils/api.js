@@ -3,6 +3,12 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/cert';
 const ADMIN_API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/cert', '/admin') || 'http://localhost:5000/api/admin';
 
+console.log('API Config:', {
+    API_BASE_URL,
+    ADMIN_API_BASE_URL,
+    MODE: import.meta.env.MODE
+});
+
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {

@@ -22,49 +22,88 @@ const withRetry = async (operation, retries = 3, delay = 5000) => {
     }
 };
 
-// Helper to get TxHash from events with expanding window search
-const getIssuanceTxHash = async (certId, issuedAt) => {
+// Helper to find block number by timestamp using binary search
+const findBlockNumberByTimestamp = async (targetTimestamp) => {
     try {
         const currentBlock = await withRetry(() => provider.getBlockNumber());
-        const currentTime = Math.floor(Date.now() / 1000);
-        const ageSeconds = currentTime - issuedAt;
+        let min = 0;
+        let max = currentBlock;
+        let closestBlock = currentBlock;
 
-        // Estimate block number (Cronos Testnet block time ~5.8s)
-        const ageBlocks = Math.floor(ageSeconds / 5.8);
-        const estimatedBlock = Math.max(0, currentBlock - ageBlocks);
+        // Optimize: if target is very recent, just scan back a bit? 
+        // Or if target is very old?
+        // Binary search is O(log N), very fast.
+
+        while (min <= max) {
+            const mid = Math.floor((min + max) / 2);
+            const block = await withRetry(() => provider.getBlock(mid));
+
+            if (!block) {
+                // If block is missing (rare), try next one
+                min = mid + 1;
+                continue;
+            }
+
+            if (block.timestamp === targetTimestamp) {
+                return mid;
+            } else if (block.timestamp < targetTimestamp) {
+                min = mid + 1;
+            } else {
+                max = mid - 1;
+                closestBlock = mid; // We want the block AFTER or AT the timestamp (issuance happens after timestamp creation usually)
+            }
+        }
+        return closestBlock;
+    } catch (e) {
+        console.warn("Error finding block by timestamp:", e);
+        // Fallback to estimation if binary search fails heavily
+        const currentBlock = await provider.getBlockNumber();
+        return Math.max(0, currentBlock - Math.floor((Date.now() / 1000 - targetTimestamp) / 5.8));
+    }
+};
+
+// Helper to get TxHash from events with precise window search
+const getIssuanceTxHash = async (certId, issuedAt) => {
+    try {
+        // Find the block where specific time happened
+        const estimatedBlock = await findBlockNumberByTimestamp(issuedAt);
+        const currentBlock = await withRetry(() => provider.getBlockNumber());
 
         const filter = contract.filters.CertificateIssued(certId);
 
-        // Defined search radii: +/- 2k, +/- 10k, +/- 50k blocks
-        // This handles small drifts (recent) vs large drifts (older certs)
-        const radii = [2000, 10000, 50000];
+        // Search radius (blocks)
+        // Since we are now accurate with the start time, we don't need huge radii for drift.
+        // But we need to account for:
+        // 1. Clock skew between backend (generating issuedAt) and Blockchain miner time.
+        // 2. Delay between "issuedAt" generation and actual transaction inclusion.
+        // Usually tx is included AFTER issuedAt.
+        // So we search from (estimatedBlock - small_buffer) to (estimatedBlock + large_buffer)
 
-        for (const radius of radii) {
-            let startBlock = Math.max(0, estimatedBlock - radius);
-            let endBlock = Math.min(currentBlock, estimatedBlock + radius);
+        const searchRange = 50000; // Search forward reasonably
+        const startBlock = Math.max(0, estimatedBlock - 100); // 100 blocks (~10 mins) buffer before
+        const endBlock = Math.min(currentBlock, estimatedBlock + searchRange);
 
-            // Chunking loop to respect RPC limit (2000 blocks per call)
-            const CHUNK_SIZE = 2000;
-            let cursor = startBlock;
+        // Chunking loop to respect RPC limit
+        const CHUNK_SIZE = 2000;
+        let cursor = startBlock;
 
-            while (cursor < endBlock) {
-                const chunkTo = Math.min(endBlock, cursor + CHUNK_SIZE);
+        while (cursor < endBlock) {
+            const chunkTo = Math.min(endBlock, cursor + CHUNK_SIZE);
 
-                try {
-                    const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
-                    if (events && events.length > 0) return events[0].transactionHash;
-                } catch (e) {
-                    console.warn(`Search failed ${cursor}-${chunkTo}:`, e.message);
-                }
-
-                cursor = chunkTo;
+            try {
+                const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
+                if (events && events.length > 0) return events[0].transactionHash;
+            } catch (e) {
+                console.warn(`Search failed ${cursor}-${chunkTo}:`, e.message);
             }
+
+            cursor = chunkTo;
         }
 
     } catch (e) {
         console.warn(`Failed to fetch txHash for certId ${certId}:`, e.message);
     }
-    return null;
+    return null; // Return null if not found (UI displays as "N/A" or link disabled)
 };
 
 // Helper to get Revocation TxHash from events
@@ -73,21 +112,17 @@ const getRevocationTxHash = async (certId, issuedAt) => {
         if (!provider) return null;
 
         const currentBlock = await withRetry(() => provider.getBlockNumber());
-        const currentTime = Math.floor(Date.now() / 1000);
-        const ageSeconds = currentTime - issuedAt;
 
-        // Estimate issuance block number (Cronos Testnet block time ~5.8s)
-        const ageBlocks = Math.floor(ageSeconds / 5.8);
-        const issuanceBlock = Math.max(0, currentBlock - ageBlocks);
+        // Revocation happens strictly AFTER issuance.
+        // But we don't know WHEN it was revoked.
+        // However, we can start searching from issuance block onwards.
+        const issuanceBlock = await findBlockNumberByTimestamp(issuedAt);
 
-        // Revocation must happen AFTER issuance. 
-        // We start searching from estimated issuance block.
         const filter = contract.filters.CertificateRevoked(certId);
 
-        // We search from issuanceBlock to currentBlock
-        // Chunking loop to respect RPC limit
+        // Search from issuance to HEAD
         const CHUNK_SIZE = 2000;
-        let cursor = Math.max(0, issuanceBlock - 1000); // Buffer of 1000 blocks before issuance just in case
+        let cursor = Math.max(0, issuanceBlock - 100);
 
         while (cursor <= currentBlock) {
             const chunkTo = Math.min(currentBlock, cursor + CHUNK_SIZE);
@@ -95,7 +130,6 @@ const getRevocationTxHash = async (certId, issuedAt) => {
             try {
                 const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
                 if (events && events.length > 0) {
-                    // Revocation found!
                     return events[0].transactionHash;
                 }
             } catch (e) {
