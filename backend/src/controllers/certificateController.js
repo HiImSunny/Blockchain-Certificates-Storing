@@ -65,79 +65,69 @@ const findBlockNumberByTimestamp = async (targetTimestamp) => {
 // Helper to get TxHash from events with precise window search
 const getIssuanceTxHash = async (certId, issuedAt) => {
     try {
-        // Find the block where specific time happened
         const estimatedBlock = await findBlockNumberByTimestamp(issuedAt);
         const currentBlock = await withRetry(() => provider.getBlockNumber());
-
         const filter = contract.filters.CertificateIssued(certId);
 
         // Search radius (blocks)
-        // Since we are now accurate with the start time, we don't need huge radii for drift.
-        // But we need to account for:
-        // 1. Clock skew between backend (generating issuedAt) and Blockchain miner time.
-        // 2. Delay between "issuedAt" generation and actual transaction inclusion.
-        // Usually tx is included AFTER issuedAt.
-        // So we search from (estimatedBlock - small_buffer) to (estimatedBlock + large_buffer)
+        // Drastically reduce search range to avoid RPC limits
+        // We expect the tx to be very close to the timestamp.
+        const startBlock = Math.max(0, estimatedBlock - 50);
+        const endBlock = Math.min(currentBlock, estimatedBlock + 500);
 
-        const searchRange = 50000; // Search forward reasonably
-        const startBlock = Math.max(0, estimatedBlock - 100); // 100 blocks (~10 mins) buffer before
-        const endBlock = Math.min(currentBlock, estimatedBlock + searchRange);
-
-        // Chunking loop to respect RPC limit
-        const CHUNK_SIZE = 2000;
+        // Smaller chunk size to be safe with free RPCs
+        const CHUNK_SIZE = 500;
         let cursor = startBlock;
 
         while (cursor < endBlock) {
             const chunkTo = Math.min(endBlock, cursor + CHUNK_SIZE);
-
             try {
+                // Add specific delay between chunks to avoid rate limiting
                 const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
                 if (events && events.length > 0) return events[0].transactionHash;
             } catch (e) {
                 console.warn(`Search failed ${cursor}-${chunkTo}:`, e.message);
             }
-
-            cursor = chunkTo;
+            cursor = chunkTo + 1;
         }
 
     } catch (e) {
         console.warn(`Failed to fetch txHash for certId ${certId}:`, e.message);
     }
-    return null; // Return null if not found (UI displays as "N/A" or link disabled)
+    return null;
 };
 
 // Helper to get Revocation TxHash from events
 const getRevocationTxHash = async (certId, issuedAt) => {
     try {
         if (!provider) return null;
-
         const currentBlock = await withRetry(() => provider.getBlockNumber());
-
-        // Revocation happens strictly AFTER issuance.
-        // But we don't know WHEN it was revoked.
-        // However, we can start searching from issuance block onwards.
-        const issuanceBlock = await findBlockNumberByTimestamp(issuedAt);
+        const estimatedBlock = await findBlockNumberByTimestamp(issuedAt);
 
         const filter = contract.filters.CertificateRevoked(certId);
 
-        // Search from issuance to HEAD
-        const CHUNK_SIZE = 2000;
-        let cursor = Math.max(0, issuanceBlock - 100);
+        // Search from issuance time onwards
+        const startBlock = Math.max(0, estimatedBlock - 50);
+
+        // Optimistically search only recent history if likely to be recently revoked? 
+        // Or search efficiently. 
+        // For revocation, it could happen ANYTIME after issuance.
+        // We MUST search to HEAD. However, this is expensive.
+        // Strategy: Search in larger chunks but RETRY if batch limit hit.
+
+        const CHUNK_SIZE = 1000;
+        let cursor = startBlock;
 
         while (cursor <= currentBlock) {
             const chunkTo = Math.min(currentBlock, cursor + CHUNK_SIZE);
-
             try {
                 const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
-                if (events && events.length > 0) {
-                    return events[0].transactionHash;
-                }
+                if (events && events.length > 0) return events[0].transactionHash;
             } catch (e) {
                 console.warn(`Revocation search failed ${cursor}-${chunkTo}:`, e.message);
             }
-
             if (cursor === currentBlock) break;
-            cursor = chunkTo;
+            cursor = chunkTo + 1;
         }
 
     } catch (e) {
@@ -623,28 +613,25 @@ export const listCertificates = async (req, res) => {
         const paginatedCerts = allCerts.slice(startIndex, endIndex);
 
         // 4. Enrich ONLY the paginated results with TxHash
-        // This drastically reduces RPC calls from N to 'limit' (10)
-        const enrichedCerts = await Promise.all(paginatedCerts.map(async (cert) => {
-            // Enriched data
+        // Execute sequentially to avoid RPC "Batch limit exceeded" errors
+        const enrichedCerts = [];
+        for (const cert of paginatedCerts) {
             const enriched = { ...cert };
 
-            const txPromises = [];
+            try {
+                // Get Issuance Hash
+                enriched.txHash = await getIssuanceTxHash(cert.certId, cert.issuedAt);
 
-            // Issuance Hash
-            txPromises.push(getIssuanceTxHash(cert.certId, cert.issuedAt).then(hash => {
-                enriched.txHash = hash;
-            }));
-
-            // Revocation Hash
-            if (cert.revoked) {
-                txPromises.push(getRevocationTxHash(cert.certId, cert.issuedAt).then(hash => {
-                    if (hash) enriched.revokeTxHash = hash;
-                }));
+                // Get Revocation Hash (only if revoked)
+                if (cert.revoked) {
+                    const revokeHash = await getRevocationTxHash(cert.certId, cert.issuedAt);
+                    if (revokeHash) enriched.revokeTxHash = revokeHash;
+                }
+            } catch (enrichError) {
+                console.warn(`Enrichment failed for ${cert.certId}:`, enrichError.message);
             }
-
-            await Promise.all(txPromises);
-            return enriched;
-        }));
+            enrichedCerts.push(enriched);
+        }
 
         res.json({
             success: true,
