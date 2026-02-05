@@ -41,15 +41,18 @@ const MetaMaskConnect = () => {
     }, []);
 
     const handleConnect = async () => {
+        console.log('[UI] Connect button clicked');
         setLoading(true);
         setError(null);
 
         try {
+            console.log('[UI] Calling connectMetaMask()...');
             const { address } = await connectMetaMask();
+            console.log('[UI] Connection successful, setting account:', address);
             setAccount(address);
         } catch (err) {
+            console.error('[UI] Connection failed:', err);
             setError(err.message);
-            console.error('Connection error:', err);
         } finally {
             setLoading(false);
         }

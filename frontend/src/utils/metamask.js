@@ -18,48 +18,63 @@ export const isMetaMaskInstalled = () => {
  * @returns {Promise<{address: string, provider: ethers.BrowserProvider, signer: ethers.Signer}>}
  */
 export const connectMetaMask = async () => {
+    console.log('[MetaMask] Starting connection process...');
     if (!isMetaMaskInstalled()) {
+        console.error('[MetaMask] MetaMask not installed');
         throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
     }
 
     try {
         // Request account access
+        console.log('[MetaMask] Requesting accounts (eth_requestAccounts)...');
         const accounts = await window.ethereum.request({
             method: 'eth_requestAccounts',
         });
+        console.log('[MetaMask] Accounts received:', accounts);
 
         // Check network
+        console.log('[MetaMask] Checking chain ID...');
         const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         const currentChainId = parseInt(chainId, 16);
+        console.log('[MetaMask] Current Chain ID:', currentChainId, 'Expected:', CHAIN_ID);
 
         if (currentChainId !== CHAIN_ID) {
+            console.log('[MetaMask] Chain mismatch. Attempting switch...');
             // Try to switch network
             try {
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
                     params: [{ chainId: NETWORK_CONFIG.chainId }],
                 });
+                console.log('[MetaMask] Network switch occurred/requested');
             } catch (switchError) {
+                console.warn('[MetaMask] Switch error:', switchError);
                 // Network not added, try to add it
                 if (switchError.code === 4902) {
+                    console.log('[MetaMask] Network not found. Adding network...');
                     await window.ethereum.request({
                         method: 'wallet_addEthereumChain',
                         params: [NETWORK_CONFIG],
                     });
+                    console.log('[MetaMask] Network added successfully');
                 } else {
                     throw switchError;
                 }
             }
+        } else {
+            console.log('[MetaMask] Chain ID matches.');
         }
 
         // Create provider and signer
+        console.log('[MetaMask] Creating provider and signer...');
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
+        console.log('[MetaMask] Connected successfully. Address:', address);
 
         return { address, provider, signer };
     } catch (error) {
-        console.error('MetaMask connection error:', error);
+        console.error('[MetaMask] Connection error detailed:', error);
         throw error;
     }
 };
