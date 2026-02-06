@@ -8,6 +8,7 @@ import {
     contract,
     provider
 } from '../services/blockchainService.js';
+import { getFromCache, setCache, CacheKeys } from '../services/cacheService.js';
 import { readFileSync, unlinkSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import https from 'https';
@@ -82,6 +83,11 @@ const findBlockNumberByTimestamp = async (targetTimestamp) => {
 // Helper to get TxHash from events with precise window search
 const getIssuanceTxHash = async (certId, issuedAt) => {
     try {
+        // 1. Check Cache
+        const cacheKey = `${CacheKeys.TX_HASH_PREFIX}ISSUED_${certId}`;
+        const cachedHash = getFromCache(cacheKey);
+        if (cachedHash) return cachedHash;
+
         const estimatedBlock = await findBlockNumberByTimestamp(issuedAt);
         const currentBlock = await withRetry(() => provider.getBlockNumber());
         const filter = contract.filters.CertificateIssued(certId);
@@ -101,7 +107,12 @@ const getIssuanceTxHash = async (certId, issuedAt) => {
             try {
                 // Add specific delay between chunks to avoid rate limiting
                 const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
-                if (events && events.length > 0) return events[0].transactionHash;
+                if (events && events.length > 0) {
+                    const txHash = events[0].transactionHash;
+                    // 2. Set Cache (Long TTL: 24 hours, effectively immutable)
+                    setCache(cacheKey, txHash, 86400);
+                    return txHash;
+                }
             } catch (e) {
                 console.warn(`Search failed ${cursor}-${chunkTo}:`, e.message);
             }
@@ -117,6 +128,11 @@ const getIssuanceTxHash = async (certId, issuedAt) => {
 // Helper to get Revocation TxHash from events
 const getRevocationTxHash = async (certId, issuedAt) => {
     try {
+        // 1. Check Cache
+        const cacheKey = `${CacheKeys.TX_HASH_PREFIX}REVOKED_${certId}`;
+        const cachedHash = getFromCache(cacheKey);
+        if (cachedHash) return cachedHash;
+
         if (!provider) return null;
         const currentBlock = await withRetry(() => provider.getBlockNumber());
         const estimatedBlock = await findBlockNumberByTimestamp(issuedAt);
@@ -139,7 +155,13 @@ const getRevocationTxHash = async (certId, issuedAt) => {
             const chunkTo = Math.min(currentBlock, cursor + CHUNK_SIZE);
             try {
                 const events = await withRetry(() => contract.queryFilter(filter, cursor, chunkTo));
-                if (events && events.length > 0) return events[0].transactionHash;
+                if (events && events.length > 0) {
+                    const txHash = events[0].transactionHash;
+                    // 2. Set Cache (Standard TTL: 1 hour, or until re-checked)
+                    // Revocation is also immutable event once happened.
+                    setCache(cacheKey, txHash, 3600);
+                    return txHash;
+                }
             } catch (e) {
                 console.warn(`Revocation search failed ${cursor}-${chunkTo}:`, e.message);
             }
@@ -603,26 +625,16 @@ export const listCertificates = async (req, res) => {
         // 3. Slice (Pagination)
         const paginatedCerts = processedCerts.slice(startIndex, endIndex);
 
-        // 4. Enrich ONLY the paginated results with TxHash
-        // Execute sequentially to avoid RPC "Batch limit exceeded" errors
-        const enrichedCerts = [];
-        for (const cert of paginatedCerts) {
-            const enriched = { ...cert };
-
-            try {
-                // Get Issuance Hash
-                enriched.txHash = await getIssuanceTxHash(cert.certId, cert.issuedAt);
-
-                // Get Revocation Hash (only if revoked)
-                if (cert.revoked) {
-                    const revokeHash = await getRevocationTxHash(cert.certId, cert.issuedAt);
-                    if (revokeHash) enriched.revokeTxHash = revokeHash;
-                }
-            } catch (enrichError) {
-                console.warn(`Enrichment failed for ${cert.certId}:`, enrichError.message);
-            }
-            enrichedCerts.push(enriched);
-        }
+        // 4. Enrich
+        // OPTIMIZATION: We do NOT fetch TxHash for the list view to ensure speed (< 5s).
+        // TxHash will be fetched on-demand in the detail view.
+        const enrichedCerts = paginatedCerts.map(cert => ({
+            ...cert,
+            // Explicitly set these to null or empty to indicate they weren't fetched
+            // Frontend should handle this by showing "View Details to see Hash" or fetching it then.
+            txHash: cert.txHash || null,
+            revokeTxHash: cert.revokeTxHash || null
+        }));
 
         res.json({
             success: true,

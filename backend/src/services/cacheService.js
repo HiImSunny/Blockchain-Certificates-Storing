@@ -8,6 +8,7 @@ export const CacheKeys = {
     ALL_CERTIFICATES: 'ALL_CERTIFICATES',
     OFFICERS_LIST: 'OFFICERS_LIST',
     CERTIFICATE_PREFIX: 'CERT_',
+    TX_HASH_PREFIX: 'TX_HASH_',
 };
 
 /**

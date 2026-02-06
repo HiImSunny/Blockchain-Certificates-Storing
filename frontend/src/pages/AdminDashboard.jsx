@@ -12,6 +12,7 @@ import {
     listCertificates,
     revokeCertificate as apiRevokeCertificate,
     listOfficers,
+    verifyCertificateById,
 } from '../utils/api';
 import {
     getCurrentAccount,
@@ -24,8 +25,16 @@ import {
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const [checkingAuth, setCheckingAuth] = useState(true);
-    const [dataLoading, setDataLoading] = useState(false);
+
+    // Separate loading states
+    const [statsLoading, setStatsLoading] = useState(false);
+    const [certsLoading, setCertsLoading] = useState(false);
+    const [officersLoading, setOfficersLoading] = useState(false);
+
     const [isAdmin, setIsAdmin] = useState(false);
+    // Use a ref to track if data has been initiated to prevent double-fetch in StrictMode
+    const dataInitiated = React.useRef(false);
+
     const [account, setAccount] = useState(null);
     const [stats, setStats] = useState(null);
     const [certificates, setCertificates] = useState([]);
@@ -48,6 +57,7 @@ const AdminDashboard = () => {
     // View modal
     const [showViewModal, setShowViewModal] = useState(false);
     const [viewTarget, setViewTarget] = useState(null);
+    const [viewDetailsLoading, setViewDetailsLoading] = useState(false); // Lazy load state
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -59,22 +69,31 @@ const AdminDashboard = () => {
 
     // Re-check when account changes (MetaMask connection)
     useEffect(() => {
-        if (account && !isAdmin) {
-            checkAdminAccess();
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length > 0) {
+                    setAccount(accounts[0]);
+                    // Optionally re-check admin here if needed, but usually redundant if cached
+                    // For safety, we can just reload the page or let the user re-connect
+                } else {
+                    setIsAdmin(false);
+                    setAccount(null);
+                }
+            });
         }
-    }, [account]);
+    }, []);
 
     const checkAdminAccess = async () => {
         try {
             const currentAccount = await getCurrentAccount();
             if (!currentAccount) {
-                // Don't set error - let the UI show MetaMask connect button
                 setCheckingAuth(false);
                 return;
             }
 
             setAccount(currentAccount);
 
+            // Fast check from cache or backend
             const adminCheck = await checkAdmin(currentAccount);
             if (!adminCheck.isAdmin) {
                 setError('Truy cập bị từ chối: Bạn không phải admin');
@@ -85,31 +104,59 @@ const AdminDashboard = () => {
             setIsAdmin(true);
             setCheckingAuth(false);
 
-            // Allow initial render, then fetch data
-            loadData();
+            // TRIGGERS DATA LOADING ONLY ONCE
+            if (!dataInitiated.current) {
+                dataInitiated.current = true;
+                loadDashboardData();
+            }
         } catch (err) {
             setError(err.message);
             setCheckingAuth(false);
         }
     };
 
-    const loadData = async () => {
-        try {
-            setDataLoading(true);
-            const [statsData, certsData, officersData] = await Promise.all([
-                getStats(),
-                listCertificates({ page, limit: 10 }),
-                listOfficers(),
-            ]);
+    const loadDashboardData = () => {
+        // Load independent parts in parallel (Progressive Rendering)
+        loadStats();
+        loadOfficers();
+        loadCertificates();
+    };
 
-            setStats(statsData.stats);
-            setCertificates(certsData.certificates);
-            setOfficers(officersData.officers);
-            setTotalPages(certsData.totalPages);
+    const loadStats = async () => {
+        try {
+            setStatsLoading(true);
+            const data = await getStats();
+            setStats(data.stats);
         } catch (err) {
-            setError(err.message);
+            console.error("Failed to load stats", err);
         } finally {
-            setDataLoading(false);
+            setStatsLoading(false);
+        }
+    };
+
+    const loadOfficers = async () => {
+        try {
+            setOfficersLoading(true);
+            const data = await listOfficers();
+            setOfficers(data.officers);
+        } catch (err) {
+            console.error("Failed to load officers", err);
+        } finally {
+            setOfficersLoading(false);
+        }
+    };
+
+    const loadCertificates = async () => {
+        try {
+            setCertsLoading(true);
+            const data = await listCertificates({ page, limit: 10 });
+            setCertificates(data.certificates);
+            setTotalPages(data.totalPages);
+        } catch (err) {
+            console.error("Failed to load certificates", err);
+            setError("Lỗi tải danh sách chứng chỉ: " + err.message);
+        } finally {
+            setCertsLoading(false);
         }
     };
 
@@ -144,11 +191,43 @@ const AdminDashboard = () => {
             setOfficerAddress('');
             setOfficerName('');
             // Reload data after delay
-            setTimeout(loadData, 2000);
+            setTimeout(() => {
+                loadOfficers();
+                loadStats(); // Officer count might change
+            }, 2000);
         } catch (err) {
             setError(err.message);
         } finally {
             setOfficerLoading(false);
+        }
+    };
+
+    const handleViewDetails = async (cert) => {
+        setViewTarget(cert);
+        setShowViewModal(true);
+
+        // Lazy load TxHash if missing (because we optimized /list to skip it)
+        // Checks if Issuance Hash is missing OR if it's Revoked but missing Revoke Hash
+        const isMissingData = !cert.txHash || (cert.status === 'REVOKED' && !cert.revokeTxHash);
+
+        if (isMissingData) {
+            try {
+                setViewDetailsLoading(true);
+                // Use backend verification API to fetch full details including TxHash
+                const response = await verifyCertificateById(cert.certificateId);
+
+                if (response.certificate) {
+                    // Update view target with full details
+                    setViewTarget(prev => ({
+                        ...prev,
+                        ...response.certificate
+                    }));
+                }
+            } catch (err) {
+                console.error("Failed to fetch additional details", err);
+            } finally {
+                setViewDetailsLoading(false);
+            }
         }
     };
 
@@ -176,7 +255,8 @@ const AdminDashboard = () => {
             setRevokeTarget(null);
 
             // Reload data
-            await loadData();
+            loadCertificates();
+            loadStats(); // Revoke count changes
         } catch (err) {
             setError(err.message);
         } finally {
@@ -263,9 +343,9 @@ const AdminDashboard = () => {
                 )}
 
                 {/* Statistics */}
-                {dataLoading && !stats ? (
-                    <div className="flex justify-center py-8">
-                        <Loader className="animate-spin" size={32} />
+                {statsLoading ? (
+                    <div className="flex justify-center py-8 mb-8">
+                        <Loader className="animate-spin text-neutral-gray" size={32} />
                     </div>
                 ) : (
                     stats && (
@@ -325,9 +405,9 @@ const AdminDashboard = () => {
                         </Button>
                     </div>
 
-                    {dataLoading && officers.length === 0 ? (
+                    {officersLoading ? (
                         <div className="flex justify-center py-8">
-                            <Loader className="animate-spin" size={32} />
+                            <Loader className="animate-spin text-neutral-gray" size={32} />
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -379,9 +459,10 @@ const AdminDashboard = () => {
                 {/* Certificate List */}
                 <Card>
                     <h3 className="font-bold text-neutral-dark mb-4">Danh Sách Chứng Chỉ</h3>
-                    {dataLoading && certificates.length === 0 ? (
-                        <div className="flex justify-center py-8">
-                            <Loader className="animate-spin" size={32} />
+                    {certsLoading ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <Loader className="animate-spin text-primary mb-4" size={48} />
+                            <p className="text-neutral-gray">Đang tải danh sách chứng chỉ...</p>
                         </div>
                     ) : (
                         <>
@@ -424,10 +505,7 @@ const AdminDashboard = () => {
                                                     <td className="py-3 px-2 flex gap-2">
                                                         <Button
                                                             variant="outline"
-                                                            onClick={() => {
-                                                                setViewTarget(cert);
-                                                                setShowViewModal(true);
-                                                            }}
+                                                            onClick={() => handleViewDetails(cert)}
                                                             className="text-sm px-3 py-1"
                                                         >
                                                             Chi Tiết
@@ -463,7 +541,12 @@ const AdminDashboard = () => {
                                 <div className="flex items-center justify-center gap-4 mt-6">
                                     <Button
                                         variant="outline"
-                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        onClick={() => {
+                                            const newPage = Math.max(1, page - 1);
+                                            setPage(newPage);
+                                            // We need to reload just certificates when page changes
+                                            // Note: useEffect dependency on page would be better, but for now we manually trigger or add useEffect
+                                        }}
                                         disabled={page === 1}
                                     >
                                         Trước
@@ -473,7 +556,10 @@ const AdminDashboard = () => {
                                     </span>
                                     <Button
                                         variant="outline"
-                                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                        onClick={() => {
+                                            const newPage = Math.min(totalPages, page + 1);
+                                            setPage(newPage);
+                                        }}
                                         disabled={page === totalPages}
                                     >
                                         Sau
@@ -596,11 +682,18 @@ const AdminDashboard = () => {
                             <span className="font-bold text-neutral-gray">Blockchain ID:</span>
                             <span className="col-span-2">{viewTarget.certId}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
-                            <span className="font-bold text-neutral-gray">Tx Hash:</span>
-                            <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.txHash || "N/A"}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline">
-                                {viewTarget.txHash || "N/A"}
-                            </a>
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2 items-center">
+                            <span className="font-bold text-neutral-gray">Issuance Tx Hash:</span>
+                            {viewDetailsLoading && !viewTarget.txHash ? (
+                                <span className="col-span-2 flex items-center gap-2 text-neutral-gray italic">
+                                    <Loader className="animate-spin" size={12} />
+                                    Đang lấy từ Blockchain...
+                                </span>
+                            ) : (
+                                <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.txHash}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline block">
+                                    {viewTarget.txHash || "N/A"}
+                                </a>
+                            )}
                         </div>
                         {viewTarget.revokeTxHash && viewTarget.revokeTxHash !== '0x' && (
                             <div className="grid grid-cols-3 gap-2 border-b pb-2">

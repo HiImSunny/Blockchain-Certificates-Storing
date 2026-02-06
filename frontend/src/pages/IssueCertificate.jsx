@@ -13,6 +13,7 @@ import {
     confirmCertificate,
     listCertificates,
     revokeCertificate as apiRevokeCertificate,
+    verifyCertificateById,
 } from '../utils/api';
 import {
     connectMetaMask,
@@ -58,6 +59,7 @@ const IssueCertificate = () => {
     const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'ISSUED', 'REVOKED'
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [certsLoading, setCertsLoading] = useState(false);
 
     // Revoke modal
     const [showRevokeModal, setShowRevokeModal] = useState(false);
@@ -67,12 +69,17 @@ const IssueCertificate = () => {
     // View modal
     const [showViewModal, setShowViewModal] = useState(false);
     const [viewTarget, setViewTarget] = useState(null);
+    const [viewDetailsLoading, setViewDetailsLoading] = useState(false);
+
+    // Track initial load
+    const isFirstLoad = React.useRef(true);
 
     useEffect(() => {
         checkAccount();
     }, []);
 
     useEffect(() => {
+        // Only load if in history tab AND account exists
         if (activeTab === 'history' && account) {
             loadCertificates();
         }
@@ -87,7 +94,7 @@ const IssueCertificate = () => {
         if (!account) return;
 
         try {
-            setLoading(true);
+            setCertsLoading(true); // Use specific loading state
             const query = {
                 page,
                 limit: 10,
@@ -104,7 +111,36 @@ const IssueCertificate = () => {
         } catch (err) {
             setError(err.message);
         } finally {
-            setLoading(false);
+            setCertsLoading(false);
+        }
+    };
+
+    const handleViewDetails = async (cert) => {
+        setViewTarget(cert);
+        setShowViewModal(true);
+
+        // Lazy load TxHash if missing (because we optimized /list to skip it)
+        // Checks if Issuance Hash is missing OR if it's Revoked but missing Revoke Hash
+        const isMissingData = !cert.txHash || (cert.status === 'REVOKED' && !cert.revokeTxHash);
+
+        if (isMissingData) {
+            try {
+                setViewDetailsLoading(true);
+                // Use backend verification API to fetch full details including TxHash
+                const response = await verifyCertificateById(cert.certificateId);
+
+                if (response.certificate) {
+                    // Update view target with full details
+                    setViewTarget(prev => ({
+                        ...prev,
+                        ...response.certificate
+                    }));
+                }
+            } catch (err) {
+                console.error("Failed to fetch additional details", err);
+            } finally {
+                setViewDetailsLoading(false);
+            }
         }
     };
 
@@ -130,6 +166,7 @@ const IssueCertificate = () => {
             setLoading(false);
         }
     };
+
 
     const handleManualCreate = async () => {
         setLoading(true);
@@ -485,9 +522,10 @@ const IssueCertificate = () => {
                                 {/* Certificate List */}
                                 <Card>
                                     <h3 className="font-bold text-neutral-dark mb-4">Danh Sách Chứng Chỉ</h3>
-                                    {loading ? (
-                                        <div className="flex items-center justify-center py-8">
-                                            <Loader className="animate-spin" size={32} />
+                                    {certsLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <Loader className="animate-spin text-primary mb-4" size={48} />
+                                            <p className="text-neutral-gray">Đang tải danh sách...</p>
                                         </div>
                                     ) : certificates.length === 0 ? (
                                         <div className="text-center py-8 text-neutral-gray">
@@ -533,10 +571,7 @@ const IssueCertificate = () => {
                                                                 <td className="py-3 px-2 flex gap-2">
                                                                     <Button
                                                                         variant="outline"
-                                                                        onClick={() => {
-                                                                            setViewTarget(cert);
-                                                                            setShowViewModal(true);
-                                                                        }}
+                                                                        onClick={() => handleViewDetails(cert)}
                                                                         className="text-sm px-3 py-1"
                                                                     >
                                                                         Chi Tiết
@@ -620,7 +655,7 @@ const IssueCertificate = () => {
                         </div>
                         <div className="grid grid-cols-3 gap-2 border-b pb-2">
                             <span className="font-bold text-neutral-gray">Ngày Cấp:</span>
-                            <span className="col-span-2">{new Date(viewTarget.issuedAt).toLocaleString()}</span>
+                            <span className="col-span-2">{new Date(viewTarget.issuedAt * 1000).toLocaleString()}</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 border-b pb-2">
                             <span className="font-bold text-neutral-gray">Trạng Thái:</span>
@@ -632,11 +667,18 @@ const IssueCertificate = () => {
                             <span className="font-bold text-neutral-gray">Blockchain ID:</span>
                             <span className="col-span-2">{viewTarget.certId}</span>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 border-b pb-2">
+                        <div className="grid grid-cols-3 gap-2 border-b pb-2 items-center">
                             <span className="font-bold text-neutral-gray">Issuance Tx Hash:</span>
-                            <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.txHash || "N/A"}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline">
-                                {viewTarget.txHash || "N/A"}
-                            </a>
+                            {viewDetailsLoading && !viewTarget.txHash ? (
+                                <span className="col-span-2 flex items-center gap-2 text-neutral-gray italic">
+                                    <Loader className="animate-spin" size={12} />
+                                    Đang lấy từ Blockchain...
+                                </span>
+                            ) : (
+                                <a href={`https://explorer.cronos.org/testnet/tx/${viewTarget.txHash}`} target="_blank" rel="noreferrer" className="col-span-2 text-blue-600 truncate hover:underline block">
+                                    {viewTarget.txHash || "N/A"}
+                                </a>
+                            )}
                         </div>
                         {viewTarget.revokeTxHash && viewTarget.revokeTxHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
                             <div className="grid grid-cols-3 gap-2 border-b pb-2">

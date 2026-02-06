@@ -27,36 +27,142 @@ const Home = () => {
     const [verifyError, setVerifyError] = useState(null);
     const [isDownloading, setIsDownloading] = useState(false);
 
+    // Check local storage for cached roles on mount
     useEffect(() => {
-        checkUserRole();
-
-        // Listen for account changes
-        if (window.ethereum) {
-            window.ethereum.on('accountsChanged', checkUserRole);
+        const cachedRole = localStorage.getItem('user_role');
+        if (cachedRole) {
+            try {
+                const { address, isAdmin: cachedAdmin, isOfficer: cachedOfficer } = JSON.parse(cachedRole);
+                // We don't have current account yet, but we can optimistically set if we find a match later
+                // actually, we can't really verify address match until we get the account. 
+                // But we can store it in a ref or temp state if needed. 
+                // Better strategy: Wait for account, then check cache.
+            } catch (e) {
+                console.error("Error parsing cached role", e);
+            }
         }
+    }, []);
+
+    useEffect(() => {
+        let mounted = true;
+        let retryCount = 0;
+        const maxRetries = 10; // 5 seconds total (500ms * 10)
+
+        const init = async () => {
+            // 1. Wait for MetaMask to be injected (fix race condition)
+            const checkMetaMask = () => {
+                if (window.ethereum) {
+                    return true;
+                }
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(checkMetaMask, 500);
+                    return false;
+                }
+                return false;
+            };
+
+            // Simple polling for window.ethereum
+            const waitForEthereum = () => new Promise((resolve) => {
+                const check = () => {
+                    if (window.ethereum) {
+                        resolve(true);
+                    } else if (retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(check, 500);
+                    } else {
+                        resolve(false);
+                    }
+                };
+                check();
+            });
+
+            const ethereumReady = await waitForEthereum();
+
+            if (!mounted) return;
+
+            if (ethereumReady) {
+                checkUserRole();
+                window.ethereum.on('accountsChanged', checkUserRole);
+            } else {
+                console.warn("MetaMask not detected after retries");
+            }
+        };
+
+        init();
 
         return () => {
+            mounted = false;
             if (window.ethereum) {
                 window.ethereum.removeListener('accountsChanged', checkUserRole);
             }
         };
     }, []);
 
-    const checkUserRole = async () => {
+    const checkUserRole = async (accounts) => {
         try {
-            const currentAccount = await getCurrentAccount();
+            // Get account (either from event args or request)
+            let currentAccount = null;
+            if (accounts && accounts.length > 0) {
+                currentAccount = accounts[0];
+            } else {
+                currentAccount = await getCurrentAccount();
+            }
+
             if (currentAccount) {
                 setAccount(currentAccount);
-                const [adminResult, officerResult] = await Promise.all([
-                    checkAdmin(currentAccount),
-                    checkOfficer(currentAccount)
-                ]);
-                setIsAdmin(adminResult.isAdmin);
-                setIsOfficer(officerResult.isOfficer || adminResult.isAdmin);
+
+                // 1. FAST PATH: Check Cache
+                const cachedRole = localStorage.getItem('user_role');
+                if (cachedRole) {
+                    try {
+                        const parsed = JSON.parse(cachedRole);
+                        if (parsed.address.toLowerCase() === currentAccount.toLowerCase()) {
+                            console.log("⚡ [Cache] Role loaded from cache");
+                            setIsAdmin(parsed.isAdmin);
+                            setIsOfficer(parsed.isOfficer);
+                        }
+                    } catch (e) {
+                        console.error("Cache parse error", e);
+                    }
+                }
+
+                // 2. SLOW PATH: Verify with Blockchain (Background update)
+                // We use Promise.allSettled to ensure one failure doesn't block the other check
+                // but Promise.all is fine here as we want both.
+
+                checkAdmin(currentAccount).then((adminResult) => {
+                    checkOfficer(currentAccount).then((officerResult) => {
+                        const newIsAdmin = adminResult.isAdmin;
+                        const newIsOfficer = officerResult.isOfficer || adminResult.isAdmin;
+
+                        // Only update state if changed (to avoid re-renders)
+                        setIsAdmin(prev => {
+                            if (prev !== newIsAdmin) return newIsAdmin;
+                            return prev;
+                        });
+                        setIsOfficer(prev => {
+                            if (prev !== newIsOfficer) return newIsOfficer;
+                            return prev;
+                        });
+
+                        // Update Cache
+                        const roleData = {
+                            address: currentAccount,
+                            isAdmin: newIsAdmin,
+                            isOfficer: newIsOfficer,
+                            timestamp: Date.now()
+                        };
+                        localStorage.setItem('user_role', JSON.stringify(roleData));
+                    });
+                }).catch(err => console.error("Background role check failed", err));
+
             } else {
                 setAccount(null);
                 setIsAdmin(false);
                 setIsOfficer(false);
+                // Clear sensitive cache on disconnect (optional, but safer)
+                // localStorage.removeItem('user_role'); 
             }
         } catch (error) {
             console.error('Lỗi kiểm tra quyền:', error);
