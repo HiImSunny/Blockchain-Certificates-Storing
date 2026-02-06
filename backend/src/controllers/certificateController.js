@@ -4,6 +4,7 @@ import { generateCertificatePDF } from '../services/pdfService.js';
 import { hashFile } from '../services/hashService.js';
 import {
     getCertificateFromBlockchain,
+    getAllCertificatesSafe,
     contract,
     provider
 } from '../services/blockchainService.js';
@@ -315,30 +316,10 @@ export const verifyCertificateById = async (req, res) => {
         if (!certificate) {
             try {
                 // Fetch all and find
-                const allCerts = await contract.getAllCertificates();
-                const found = allCerts.find(c => c.certificateIdString === certId || Number(c.certId) === numericId);
+                const allCerts = await getAllCertificatesSafe();
+                const found = allCerts.find(c => c.certificateId === certId || Number(c.certId) === numericId);
                 if (found) {
-                    // Map struct to object
-                    certificate = {
-                        certId: Number(found.certId),
-                        issuer: found.issuer,
-                        certHash: found.certHash,
-                        certificateId: found.certificateIdString,
-                        studentName: found.studentName,
-                        courseName: found.courseName,
-                        courseCode: found.courseCode,
-                        trainingType: found.trainingType,
-                        duration: found.duration,
-                        result: found.result,
-                        issuerName: found.issuerName,
-                        issuerWebsite: found.issuerWebsite,
-                        issuerContact: found.issuerContact,
-                        fileUrl: found.fileUrl,
-                        fileType: found.fileType,
-                        issuedAt: Number(found.issuedAt),
-                        revoked: found.revoked,
-                        revokeTxHash: found.revokeTxHash
-                    };
+                    certificate = found;
                 }
             } catch (e) {
                 console.error("Error searching certificates:", e);
@@ -450,7 +431,7 @@ export const verifyCertificateByFile = async (req, res) => {
         // We iterate through all certificates
         let certificate = null;
         try {
-            const allCerts = await contract.getAllCertificates();
+            const allCerts = await getAllCertificatesSafe();
             // Assuming certHash on chain is stored as bytes32, and our hash is hex string.
             // We might need to handle '0x' prefix.
             const targetHash = certHash.startsWith('0x') ? certHash : `0x${certHash}`;
@@ -458,26 +439,7 @@ export const verifyCertificateByFile = async (req, res) => {
             const found = allCerts.find(c => c.certHash === targetHash);
 
             if (found) {
-                certificate = {
-                    certId: Number(found.certId),
-                    issuer: found.issuer,
-                    certHash: found.certHash,
-                    certificateId: found.certificateIdString,
-                    studentName: found.studentName,
-                    courseName: found.courseName,
-                    courseCode: found.courseCode,
-                    trainingType: found.trainingType,
-                    duration: found.duration,
-                    result: found.result,
-                    issuerName: found.issuerName,
-                    issuerWebsite: found.issuerWebsite,
-                    issuerContact: found.issuerContact,
-                    fileUrl: found.fileUrl,
-                    fileType: found.fileType,
-                    issuedAt: Number(found.issuedAt),
-                    revoked: found.revoked,
-                    revokeTxHash: found.revokeTxHash
-                };
+                certificate = found;
             }
         } catch (e) {
             console.error("Error searching by hash:", e);
@@ -561,12 +523,12 @@ export const downloadCertificate = async (req, res) => {
         if (!certificate) {
             // Try search
             try {
-                const allCerts = await contract.getAllCertificates();
-                const found = allCerts.find(c => c.certificateIdString === certId || Number(c.certId) === numericId);
+                const allCerts = await getAllCertificatesSafe();
+                const found = allCerts.find(c => c.certificateId === certId || Number(c.certId) === numericId);
                 if (found) {
                     certificate = {
                         fileUrl: found.fileUrl,
-                        certificateId: found.certificateIdString,
+                        certificateId: found.certificateId,
                         fileType: found.fileType
                     };
                 }
@@ -616,47 +578,30 @@ export const listCertificates = async (req, res) => {
     try {
         const { page = 1, limit = 10, status, issuerAddress } = req.query;
 
-        // Fetch all from blockchain
-        const allCertsStruct = await withRetry(() => contract.getAllCertificates());
+        // Fetch all from blockchain SAFE
+        const allCerts = await getAllCertificatesSafe();
 
-        // 1. Map to basic JS objects (cheap)
-        let allCerts = allCertsStruct.map(cert => ({
-            certId: Number(cert.certId),
-            issuer: cert.issuer,
-            certHash: cert.certHash,
-            certificateId: cert.certificateIdString,
-            studentName: cert.studentName,
-            courseName: cert.courseName,
-            courseCode: cert.courseCode,
-            trainingType: cert.trainingType,
-            duration: cert.duration,
-            result: cert.result,
-            issuerName: cert.issuerName,
-            issuerWebsite: cert.issuerWebsite,
-            issuerContact: cert.issuerContact,
-            fileUrl: cert.fileUrl,
-            fileType: cert.fileType,
-            issuedAt: Number(cert.issuedAt),
-            revoked: cert.revoked,
-            revokeTxHash: cert.revokeTxHash,
+        // 1. Map to basic JS objects (cheap) -> ALREADY MAPPED BY SERVICE
+        let processedCerts = allCerts.map(cert => ({
+            ...cert,
             status: cert.revoked ? 'REVOKED' : 'ISSUED'
-        })).sort((a, b) => b.issuedAt - a.issuedAt); // Descending order (newest first)
+        })); //.sort((a, b) => b.issuedAt - a.issuedAt); // Already sorted by blockchainService
 
         // 2. Filter
         if (status) {
-            allCerts = allCerts.filter(c => c.status === status);
+            processedCerts = processedCerts.filter(c => c.status === status);
         }
 
         if (issuerAddress) {
-            allCerts = allCerts.filter(c => c.issuer.toLowerCase() === issuerAddress.toLowerCase());
+            processedCerts = processedCerts.filter(c => c.issuer.toLowerCase() === issuerAddress.toLowerCase());
         }
 
-        const count = allCerts.length;
+        const count = processedCerts.length;
         const startIndex = (page - 1) * limit;
         const endIndex = page * limit;
 
         // 3. Slice (Pagination)
-        const paginatedCerts = allCerts.slice(startIndex, endIndex);
+        const paginatedCerts = processedCerts.slice(startIndex, endIndex);
 
         // 4. Enrich ONLY the paginated results with TxHash
         // Execute sequentially to avoid RPC "Batch limit exceeded" errors

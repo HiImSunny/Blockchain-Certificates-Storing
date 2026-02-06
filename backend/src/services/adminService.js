@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI, RPC_URL } from '../config/contract.js';
+import { getFromCache, setCache, CacheKeys } from './cacheService.js';
 
 // Read-only provider
 const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -27,10 +28,9 @@ export const isAdmin = async (address) => {
  */
 export const isOfficer = async (address) => {
     try {
-        const officerData = await contract.officers(address);
-        // officerData is [name, address, addedAt, isActive]
-        // or Result object with .isActive property
-        return officerData.isActive;
+        const isOfficer = await contract.officers(address);
+        // officerData is now a boolean based on the updated ABI
+        return isOfficer;
     } catch (error) {
         console.error('Check officer error:', error);
         return false;
@@ -56,14 +56,23 @@ export const getAdminAddress = async () => {
  */
 export const getOfficersList = async () => {
     try {
+        const cachedOfficers = getFromCache(CacheKeys.OFFICERS_LIST);
+        if (cachedOfficers) {
+            console.log('Serving officers from cache');
+            return cachedOfficers;
+        }
+
         const officers = await contract.getOfficers();
         // Map struct to JS object
-        return officers.map(o => ({
+        const mappedOfficers = officers.map(o => ({
             name: o.name,
             address: o.officerAddress,
             addedAt: Number(o.addedAt),
             isActive: o.isActive
         }));
+
+        setCache(CacheKeys.OFFICERS_LIST, mappedOfficers);
+        return mappedOfficers;
     } catch (error) {
         console.error('Get officers list error:', error);
         return [];

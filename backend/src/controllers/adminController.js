@@ -1,5 +1,5 @@
 import { isAdmin, isOfficer, getAdminAddress, getOfficersList } from '../services/adminService.js';
-import { contract } from '../services/blockchainService.js';
+import { getAllCertificatesSafe } from '../services/blockchainService.js';
 
 /**
  * Check if address is admin
@@ -65,8 +65,8 @@ export const getAdmin = async (req, res) => {
  */
 export const getStats = async (req, res) => {
     try {
-        // Fetch all certs from blockchain to count
-        const allCerts = await contract.getAllCertificates();
+        // Fetch all certs from blockchain (SAFE & CACHED)
+        const allCerts = await getAllCertificatesSafe();
 
         const total = allCerts.length;
         const revoked = allCerts.filter(c => c.revoked).length;

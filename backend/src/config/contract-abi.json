@@ -533,21 +533,6 @@
       "name": "officers",
       "outputs": [
         {
-          "internalType": "string",
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "internalType": "address",
-          "name": "officerAddress",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "addedAt",
-          "type": "uint256"
-        },
-        {
           "internalType": "bool",
           "name": "isActive",
           "type": "bool"
