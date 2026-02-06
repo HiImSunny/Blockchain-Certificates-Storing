@@ -9,6 +9,22 @@ import {
 } from '../services/blockchainService.js';
 import { readFileSync, unlinkSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import https from 'https';
+
+const fetchBuffer = (url) => {
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            if (res.statusCode !== 200) {
+                reject(new Error(`Failed to fetch file: ${res.statusCode}`));
+                return;
+            }
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', (err) => reject(err));
+        }).on('error', (err) => reject(err));
+    });
+};
 
 // Retry helper (5s delay, 3 retries)
 const withRetry = async (operation, retries = 3, delay = 5000) => {
@@ -363,6 +379,35 @@ export const verifyCertificateById = async (req, res) => {
         // Blockchain verification status
         const blockchainValid = !certificate.revoked;
 
+        // Proactive Integrity Check: Verify that the file at fileUrl matches the certHash on Blockchain
+        let integrityValid = false;
+        let integrityMessage = '';
+        let actualHash = null;
+
+        try {
+            if (certificate.fileUrl) {
+                const fileBuffer = await fetchBuffer(certificate.fileUrl);
+                actualHash = hashFile(fileBuffer);
+
+                // Normalize hashes for comparison
+                const expectedHash = certificate.certHash.toLowerCase().startsWith('0x') ? certificate.certHash.toLowerCase() : `0x${certificate.certHash.toLowerCase()}`;
+                const computedHash = actualHash.toLowerCase().startsWith('0x') ? actualHash.toLowerCase() : `0x${actualHash.toLowerCase()}`;
+
+                if (computedHash === expectedHash) {
+                    integrityValid = true;
+                    integrityMessage = '✅ Khớp: File thực tế trùng khớp hoàn toàn với mã Hash trên Blockchain.';
+                } else {
+                    integrityValid = false;
+                    integrityMessage = '❌ Cảnh báo: File trên kho lưu trữ đã bị sửa đổi hoặc tráo đổi!';
+                }
+            } else {
+                integrityMessage = 'Không tìm thấy URL file để kiểm tra tính toàn vẹn.';
+            }
+        } catch (error) {
+            console.error('Integrity check failed:', error.message);
+            integrityMessage = '⚠️ Không thể tải file để kiểm tra tính toàn vẹn (Cloudinary).';
+        }
+
         res.json({
             success: true,
             certificate, // Return the full data from blockchain
@@ -371,8 +416,9 @@ export const verifyCertificateById = async (req, res) => {
                 data: certificate,
             },
             integrity: {
-                valid: true,
-                message: 'Data sourced directly from Blockchain.'
+                valid: integrityValid,
+                message: integrityMessage,
+                actualHash: actualHash
             }
         });
     } catch (error) {
