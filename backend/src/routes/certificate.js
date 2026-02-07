@@ -9,6 +9,8 @@ import {
     downloadCertificate,
     listCertificates,
     revokeCertificateById,
+    deleteCertificateFile,
+    proxyPDF,
 } from '../controllers/certificateController.js';
 
 const router = express.Router();
@@ -36,5 +38,11 @@ router.post('/revoke', revokeCertificateById);
 
 // List certificates (optional - for admin)
 router.get('/list', listCertificates);
+
+// Delete certificate file from Cloudinary
+router.delete('/delete-file', deleteCertificateFile);
+
+// Proxy PDF from Cloudinary (bypass CORS)
+router.get('/proxy-pdf/:publicId(*)', proxyPDF);
 
 export default router;

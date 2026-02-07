@@ -8,245 +8,315 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Generate a certificate PDF (Supports Unicode/Vietnamese)
- * @param {object} data - Certificate data
- * @returns {Promise<Buffer>} - PDF buffer
+ * Tạo file PDF chứng chỉ (Chuẩn VN - Layout chính xác)
+ * @param {object} data - Dữ liệu chứng chỉ
+ * @returns {Promise<Buffer>} - Buffer PDF
  */
 export const generateCertificatePDF = async (data) => {
     try {
-        // Create a new PDF document
         const pdfDoc = await PDFDocument.create();
-        // Register fontkit (handle ESM/CJS interop)
         pdfDoc.registerFontkit(fontkit.default || fontkit);
 
-        // Construct paths to font files correctly relative to this file
-        // Current file is in: src/services/
-        // Fonts are in: src/assets/fonts/
         const fontsPath = join(__dirname, '..', 'assets', 'fonts');
 
-        const regularFontBytes = readFileSync(join(fontsPath, 'Roboto-Regular.ttf'));
-        const boldFontBytes = readFileSync(join(fontsPath, 'Roboto-Bold.ttf'));
-        const italicFontBytes = readFileSync(join(fontsPath, 'Roboto-Italic.ttf'));
+        const regularFontBytes = readFileSync(join(fontsPath, 'TimesNewRoman-Regular.ttf'));
+        const boldFontBytes = readFileSync(join(fontsPath, 'TimesNewRoman-Bold.ttf'));
+        const italicFontBytes = readFileSync(join(fontsPath, 'TimesNewRoman-Italic.ttf'));
 
         const regularFont = await pdfDoc.embedFont(regularFontBytes);
         const boldFont = await pdfDoc.embedFont(boldFontBytes);
         const italicFont = await pdfDoc.embedFont(italicFontBytes);
 
-        const page = pdfDoc.addPage([842, 595]); // A4 landscape
-
+        const page = pdfDoc.addPage([842, 595]); // A4 ngang
         const { width, height } = page.getSize();
 
-        // Colors
-        const primaryColor = rgb(0.85, 0.4, 0.1); // Orange
-        const darkColor = rgb(0.2, 0.2, 0.2);
-        const lightColor = rgb(0.5, 0.5, 0.5);
+        // Màu sắc
+        const redColor = rgb(0.8, 0.1, 0.1);
+        const orangeColor = rgb(0.85, 0.4, 0.1);
+        const goldColor = rgb(0.85, 0.65, 0.1);
+        const darkColor = rgb(0.1, 0.1, 0.1);
+        const lightColor = rgb(0.4, 0.4, 0.4);
 
-        // Draw border
+        // Viền vàng ngoài
         page.drawRectangle({
             x: 30,
             y: 30,
             width: width - 60,
             height: height - 60,
-            borderColor: primaryColor,
-            borderWidth: 3,
+            borderColor: orangeColor,
+            borderWidth: 5,
         });
 
+        // Viền đen trong
         page.drawRectangle({
-            x: 40,
-            y: 40,
-            width: width - 80,
-            height: height - 80,
+            x: 45,
+            y: 45,
+            width: width - 90,
+            height: height - 90,
             borderColor: darkColor,
-            borderWidth: 1,
+            borderWidth: 1.5,
         });
 
-        // Header
-        page.drawText('Digital Certificate Storing by DNC', {
-            x: width / 2 - 180,
-            y: height - 80,
-            size: 16,
-            font: italicFont,
-            color: primaryColor,
-        });
+        // ========== HEADER ==========
+        let yPos = height - 85;
 
-        // Title
-        page.drawText('CERTIFICATE', {
-            x: width / 2 - 80,
-            y: height - 130,
-            size: 32,
+
+        // CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+        const title1 = 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM';
+        page.drawText(title1, {
+            x: (width - boldFont.widthOfTextAtSize(title1, 13)) / 2,
+            y: yPos,
+            size: 13,
             font: boldFont,
             color: darkColor,
         });
 
-        page.drawText('OF COMPLETION', {
-            x: width / 2 - 70,
-            y: height - 160,
-            size: 18,
+        yPos -= 22;
+
+        // Độc lập - Tự do - Hạnh phúc
+        const title2 = 'Độc lập - Tự do - Hạnh phúc';
+        page.drawText(title2, {
+            x: (width - boldFont.widthOfTextAtSize(title2, 12)) / 2,
+            y: yPos,
+            size: 12,
+            font: boldFont,
+            color: darkColor,
+        });
+
+        yPos -= 50;
+
+
+
+        // ========== TÊN TỔ CHỨC (nếu có) ==========
+        if (data.issuerName) {
+            const issuerNameUpper = data.issuerName.toUpperCase();
+            // Use dynamic centering
+            const issuerWidth = boldFont.widthOfTextAtSize(issuerNameUpper, 13);
+            page.drawText(issuerNameUpper, {
+                x: (width - issuerWidth) / 2,
+                y: yPos,
+                size: 13,
+                font: boldFont,
+                color: darkColor,
+            });
+            yPos -= 35;
+        } else {
+            yPos -= 10;
+        }
+
+        // ========== TEST (đã căn giữa) ==========
+        if (data.testLabel) {
+            const testText = 'TEST';
+            const testWidth = regularFont.widthOfTextAtSize(testText, 11);
+            page.drawText(testText, {
+                x: (width - testWidth) / 2,
+                y: yPos,
+                size: 11,
+                font: regularFont,
+                color: darkColor,
+            });
+            yPos -= 25;
+        }
+
+        // ========== CHỨNG CHỈ (đã căn giữa) ==========
+        yPos -= 20; // Extra spacing as requested
+        const certTitle = 'CHỨNG CHỈ';
+        const certTitleWidth = boldFont.widthOfTextAtSize(certTitle, 38);
+        page.drawText(certTitle, {
+            x: (width - certTitleWidth) / 2,
+            y: yPos,
+            size: 38,
+            font: boldFont,
+            color: orangeColor,
+        });
+
+        yPos -= 32;
+
+        // HOÀN THÀNH KHÓA HỌC (đã căn giữa)
+        const textComplete = 'HOÀN THÀNH KHÓA HỌC';
+        const textCompleteWidth = regularFont.widthOfTextAtSize(textComplete, 15);
+        page.drawText(textComplete, {
+            x: (width - textCompleteWidth) / 2,
+            y: yPos,
+            size: 15,
             font: regularFont,
+            color: darkColor,
+        });
+
+        yPos -= 25;
+
+        // Số chứng chỉ
+        const certId = `Số: ${data.certificateId || 'N/A'}`;
+        page.drawText(certId, {
+            x: width / 2 - (certId.length * 3),
+            y: yPos,
+            size: 10,
+            font: italicFont,
             color: lightColor,
         });
 
-        // Certificate ID
-        page.drawText(`Certificate ID: ${data.certificateId || 'N/A'}`, {
-            x: width / 2 - 100,
-            y: height - 190,
+        yPos -= 45;
+
+        // ========== CHỨNG NHẬN ÔNG/BÀ ==========
+        const leftMargin = 160;
+
+        page.drawText('Chứng nhận ông/bà:', {
+            x: leftMargin,
+            y: yPos,
             size: 11,
             font: regularFont,
-            color: lightColor,
-        });
-
-        // Content
-        let yPosition = height - 240;
-
-        // Student name
-        page.drawText('This is to certify that', {
-            x: width / 2 - 80,
-            y: yPosition,
-            size: 12,
-            font: regularFont,
             color: darkColor,
         });
 
-        yPosition -= 35;
-        page.drawText(data.studentName || 'N/A', {
-            x: width / 2 - (data.studentName?.length * 6 || 20),
-            y: yPosition,
-            size: 24,
+        yPos -= 30;
+
+        // TÊN HỌC VIÊN (IN HOA, ĐỎ, TO)
+        const studentNameUpper = (data.studentName || 'TEST').toUpperCase();
+        const studentNameWidth = studentNameUpper.length * 9;
+        page.drawText(studentNameUpper, {
+            x: width / 2 - studentNameWidth / 2,
+            y: yPos,
+            size: 20,
             font: boldFont,
-            color: primaryColor,
+            color: orangeColor,
         });
 
-        // Draw underline
+        // Gạch dưới tên
         page.drawLine({
-            start: { x: 150, y: yPosition - 5 },
-            end: { x: width - 150, y: yPosition - 5 },
+            start: { x: 240, y: yPos - 5 },
+            end: { x: width - 240, y: yPos - 5 },
             thickness: 1,
             color: lightColor,
         });
 
-        yPosition -= 50;
+        yPos -= 40;
 
-        // Course information
-        page.drawText('has successfully completed the course', {
-            x: width / 2 - 140,
-            y: yPosition,
-            size: 12,
+        // ========== ĐÃ HOÀN THÀNH CHƯƠNG TRÌNH ==========
+        page.drawText('Đã hoàn thành chương trình:', {
+            x: leftMargin,
+            y: yPos,
+            size: 11,
             font: regularFont,
             color: darkColor,
         });
 
-        yPosition -= 30;
-        page.drawText(`"${data.courseName || 'N/A'}"`, {
-            x: width / 2 - ((data.courseName?.length * 5) || 30),
-            y: yPosition,
-            size: 16,
+        yPos -= 30;
+
+        // TÊN KHÓA HỌC (trong ngoặc kép, in đậm)
+        const courseName = data.courseName || 'tét';
+        const courseText = `"${courseName}"`;
+        const courseWidth = courseText.length * 7;
+        page.drawText(courseText, {
+            x: width / 2 - courseWidth / 2,
+            y: yPos,
+            size: 15,
             font: boldFont,
             color: darkColor,
         });
 
-        yPosition -= 40;
+        yPos -= 40;
 
-        // Additional details
-        const details = [
-            { label: 'Course Code:', value: data.courseCode || 'N/A' },
-            { label: 'Training Type:', value: data.trainingType || 'N/A' },
-            { label: 'Duration:', value: data.duration || 'N/A' },
-            { label: 'Result:', value: data.result || 'N/A' },
-        ];
+        // ========== CHI TIẾT KHÓA HỌC (2 CỘT) ==========
+        const col1X = leftMargin;
+        const col2X = width / 2 + 20;
 
-        details.forEach((detail) => {
-            page.drawText(`${detail.label} ${detail.value}`, {
-                x: 100,
-                y: yPosition,
-                size: 10,
-                font: regularFont,
-                color: darkColor,
-            });
-            yPosition -= 20;
-        });
-
-        // Issuer information
-        yPosition -= 20;
-        page.drawText(`Issued by: ${data.issuerName || 'N/A'}`, {
-            x: 100,
-            y: yPosition,
-            size: 11,
-            font: boldFont,
-            color: darkColor,
-        });
-
-        yPosition -= 20;
-        if (data.issuerWebsite) {
-            page.drawText(`Website: ${data.issuerWebsite}`, {
-                x: 100,
-                y: yPosition,
-                size: 9,
-                font: regularFont,
-                color: lightColor,
-            });
-            yPosition -= 15;
-        }
-
-        if (data.issuerContact) {
-            page.drawText(`Contact: ${data.issuerContact}`, {
-                x: 100,
-                y: yPosition,
-                size: 9,
-                font: regularFont,
-                color: lightColor,
-            });
-        }
-
-        // Date
-        const issuedDate = data.issuedAt
-            ? new Date(data.issuedAt).toLocaleDateString('en-US')
-            : new Date().toLocaleDateString('en-US');
-
-        page.drawText(`Issued on: ${issuedDate}`, {
-            x: width - 250,
-            y: 100,
+        // Cột 1
+        page.drawText(`Mã khóa học: ${data.courseCode || 'N/A'}`, {
+            x: col1X,
+            y: yPos,
             size: 10,
             font: regularFont,
             color: darkColor,
         });
 
-        // Set metadata and dates for determinism
+        page.drawText(`Hình thức: ${data.trainingType || 'Trực tuyến'}`, {
+            x: col1X,
+            y: yPos - 18,
+            size: 10,
+            font: regularFont,
+            color: darkColor,
+        });
+
+        // Cột 2
+        page.drawText(`Thời lượng: ${data.duration || 'N/A'}`, {
+            x: col2X,
+            y: yPos,
+            size: 10,
+            font: regularFont,
+            color: darkColor,
+        });
+
+        page.drawText(`Kết quả: ${data.result || 'N/A'}`, {
+            x: col2X,
+            y: yPos - 18,
+            size: 10,
+            font: regularFont,
+            color: darkColor,
+        });
+
+        yPos -= 55;
+
+        // ========== FOOTER (Disclaimers) ==========
+        let footerY = 85;
+
+        const line1 = 'Đây là chứng chỉ số được xác thực trên Cronos Blockchain.';
+        const line2 = `Chứng chỉ giấy gốc do ${data.issuerName || 'Tổ chức'} cấp có giá trị pháp lý chính thức.`;
+        const line3 = 'Xác minh tính hợp lệ tại: https://blockchain-certificates-storing.vercel.app/';
+
+        // Line 1
+        page.drawText(line1, {
+            x: (width - italicFont.widthOfTextAtSize(line1, 10)) / 2,
+            y: footerY,
+            size: 10,
+            font: italicFont,
+            color: darkColor,
+        });
+
+        // Line 2
+        page.drawText(line2, {
+            x: (width - italicFont.widthOfTextAtSize(line2, 10)) / 2,
+            y: footerY - 15,
+            size: 10,
+            font: italicFont,
+            color: darkColor,
+        });
+
+        // Line 3
+        page.drawText(line3, {
+            x: (width - italicFont.widthOfTextAtSize(line3, 10)) / 2,
+            y: footerY - 30,
+            size: 10,
+            font: italicFont,
+            color: darkColor,
+        });
+
+        // ========== METADATA ==========
         const creationDate = data.issuedAt ? new Date(data.issuedAt) : new Date();
         pdfDoc.setCreationDate(creationDate);
         pdfDoc.setModificationDate(creationDate);
-        pdfDoc.setTitle('Certificate');
-        pdfDoc.setAuthor('Blockchain Certificate System');
-        pdfDoc.setProducer('Blockchain Certificate System');
+        pdfDoc.setTitle('Chứng Chỉ Hoàn Thành Khóa Học');
+        pdfDoc.setAuthor(data.issuerName || 'Hệ Thống Chứng Chỉ');
+        pdfDoc.setProducer('Hệ Thống Chứng Chỉ Blockchain');
 
-        // Footer - Blockchain verification note
-        page.drawText('This certificate is verified on Cronos Blockchain', {
-            x: width / 2 - 145,
-            y: 60,
-            size: 9,
-            font: italicFont,
-            color: lightColor,
-        });
-
-        // Serialize the PDF to bytes
         const pdfBytes = await pdfDoc.save();
         return Buffer.from(pdfBytes);
     } catch (error) {
-        console.error('PDF generation error:', error);
-        throw new Error(`Failed to generate PDF: ${error.message}`);
+        console.error('Lỗi tạo PDF:', error);
+        throw new Error(`Không thể tạo PDF: ${error.message}`);
     }
 };
 
 /**
- * Save PDF to file system
- * @param {Buffer} pdfBuffer - PDF buffer
- * @param {string} outputPath - Output file path
+ * Lưu PDF vào hệ thống file
+ * @param {Buffer} pdfBuffer - Buffer PDF
+ * @param {string} outputPath - Đường dẫn file output
  */
 export const savePDF = (pdfBuffer, outputPath) => {
     try {
         writeFileSync(outputPath, pdfBuffer);
         return outputPath;
     } catch (error) {
-        console.error('PDF save error:', error);
-        throw new Error(`Failed to save PDF: ${error.message}`);
+        console.error('Lỗi lưu PDF:', error);
+        throw new Error(`Không thể lưu PDF: ${error.message}`);
     }
 };

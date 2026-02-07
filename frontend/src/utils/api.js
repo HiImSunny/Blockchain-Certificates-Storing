@@ -147,6 +147,19 @@ export const listCertificates = async (params = {}) => {
     return response.data;
 };
 
+/**
+ * Delete certificate file from Cloudinary
+ * @param {string} cloudinaryPublicId
+ * @returns {Promise<object>}
+ */
+export const deleteCertificateFile = async (cloudinaryPublicId) => {
+    const response = await api.delete('/delete-file', {
+        data: { cloudinaryPublicId }
+    });
+    return response.data;
+};
+
+
 // Admin API calls
 
 /**
