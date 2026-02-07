@@ -1,3 +1,0 @@
-Error: Failed to generate PDF: Unknown font format
-    at generateCertificatePDF (file:///D:/Code%20Project/Website%20Coding/Blockchain-Certificates-Storing/backend/src/services/pdfService.js:235:15)
-    at async run (file:///D:/Code%20Project/Website%20Coding/Blockchain-Certificates-Storing/backend/scripts/test_pdf_determinism.js:20:18)
