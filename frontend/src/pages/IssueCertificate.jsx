@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Loader, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader, Trash2, Copy } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -14,6 +14,7 @@ import {
     listCertificates,
     revokeCertificate as apiRevokeCertificate,
     verifyCertificateById,
+    deleteCertificateFile,
 } from '../utils/api';
 import {
     connectMetaMask,
@@ -53,6 +54,8 @@ const IssueCertificate = () => {
     // Preview modal
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState(null);
+    const [certificateIssued, setCertificateIssued] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(true);
 
     // History state
     const [certificates, setCertificates] = useState([]);
@@ -70,6 +73,9 @@ const IssueCertificate = () => {
     const [showViewModal, setShowViewModal] = useState(false);
     const [viewTarget, setViewTarget] = useState(null);
     const [viewDetailsLoading, setViewDetailsLoading] = useState(false);
+
+    // Copy state
+    const [copiedId, setCopiedId] = useState(null);
 
     // Track initial load
     const isFirstLoad = React.useRef(true);
@@ -175,6 +181,7 @@ const IssueCertificate = () => {
         try {
             const result = await createCertificate(formData);
             setUploadData(result);
+            setPdfLoading(true);
             setShowPreview(true);
             setPreviewData(result);
         } catch (err) {
@@ -229,6 +236,7 @@ const IssueCertificate = () => {
             });
 
             setSuccess(`Phát hành chứng chỉ thành công! Mã: ${uploadData.certificateId}`);
+            setCertificateIssued(true);
             setShowPreview(false);
 
             // Reset form
@@ -257,6 +265,25 @@ const IssueCertificate = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handlePreviewClose = async () => {
+        // If certificate was not issued, cleanup the uploaded file
+        if (!certificateIssued && uploadData?.cloudinaryPublicId) {
+            try {
+                console.log('Cleaning up unused file:', uploadData.cloudinaryPublicId);
+                await deleteCertificateFile(uploadData.cloudinaryPublicId);
+                console.log('File cleanup successful');
+            } catch (error) {
+                console.error('Failed to cleanup file:', error);
+                // Don't block UI on cleanup failure
+            }
+        }
+
+        // Reset states
+        setCertificateIssued(false);
+        setShowPreview(false);
+        setPreviewData(null);
     };
 
     const handleRevoke = async () => {
@@ -288,6 +315,16 @@ const IssueCertificate = () => {
             setError(err.message);
         } finally {
             setRevokeLoading(false);
+        }
+    };
+
+    const handleCopy = async (certificateId) => {
+        try {
+            await navigator.clipboard.writeText(certificateId);
+            setCopiedId(certificateId);
+            setTimeout(() => setCopiedId(null), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
         }
     };
 
@@ -465,7 +502,7 @@ const IssueCertificate = () => {
                                         </Button>
                                     )}
                                     {mode === 'upload' && uploadData && (
-                                        <Button onClick={() => { setShowPreview(true); setPreviewData(uploadData); }}>
+                                        <Button onClick={() => { setPdfLoading(true); setShowPreview(true); setPreviewData(uploadData); }}>
                                             Xem Trước & Phát Hành
                                         </Button>
                                     )}
@@ -549,7 +586,20 @@ const IssueCertificate = () => {
                                                         {certificates.map((cert) => (
                                                             <tr key={cert.certId} className="border-b border-neutral-gray">
                                                                 <td className="py-3 px-2 font-mono text-xs">
-                                                                    {cert.certificateId}
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span>{cert.certificateId}</span>
+                                                                        <button
+                                                                            onClick={() => handleCopy(cert.certificateId)}
+                                                                            className="p-1 hover:bg-neutral-gray/20 rounded transition-colors"
+                                                                            title="Copy mã chứng chỉ"
+                                                                        >
+                                                                            {copiedId === cert.certificateId ? (
+                                                                                <span className="text-green-600 text-xs">✓</span>
+                                                                            ) : (
+                                                                                <Copy size={14} className="text-neutral-gray hover:text-neutral-dark" />
+                                                                            )}
+                                                                        </button>
+                                                                    </div>
                                                                 </td>
                                                                 <td className="py-3 px-2">{cert.studentName}</td>
                                                                 <td className="py-3 px-2">{cert.courseName}</td>
@@ -695,11 +745,11 @@ const IssueCertificate = () => {
             {/* Preview Modal */}
             <Modal
                 isOpen={showPreview}
-                onClose={() => setShowPreview(false)}
+                onClose={handlePreviewClose}
                 title="Xem Trước Chứng Chỉ"
                 footer={
                     <>
-                        <Button variant="outline" onClick={() => setShowPreview(false)}>
+                        <Button variant="outline" onClick={handlePreviewClose}>
                             Hủy
                         </Button>
                         <Button onClick={handleIssueToBlockchain} disabled={loading}>
@@ -718,17 +768,69 @@ const IssueCertificate = () => {
                             <p className="text-sm text-neutral-gray">File Hash</p>
                             <p className="font-mono text-xs break-all">{previewData.certHash}</p>
                         </div>
-                        <div>
-                            <p className="text-sm text-neutral-gray">File URL</p>
-                            <a
-                                href={previewData.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary underline text-sm"
-                            >
-                                Xem Chứng Chỉ
-                            </a>
+
+                        {/* Certificate Preview */}
+                        <div className="border-t pt-4">
+                            <p className="text-sm text-neutral-gray mb-2">Xem Trước Chứng Chỉ</p>
+                            {previewData.fileType === 'pdf' ? (
+                                <div className="space-y-3">
+                                    {/* Extract publicId from Cloudinary URL for proxy */}
+                                    {(() => {
+                                        // Extract public_id from Cloudinary URL, skipping signature
+                                        let publicId = '';
+                                        const urlParts = previewData.fileUrl.split('/upload/');
+                                        if (urlParts.length > 1) {
+                                            const afterUpload = urlParts[1];
+                                            const cleaned = afterUpload.replace(/^s--[^/]+--\//, '').replace(/^v\d+\//, '');
+                                            publicId = cleaned.split('?')[0];
+                                        }
+
+                                        // Use full URL for proxy
+                                        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/cert';
+                                        const proxyUrl = publicId ? `${apiBase}/proxy-pdf/${publicId}` : '';
+
+                                        return (
+                                            <>
+                                                {proxyUrl && (
+                                                    <div className="relative">
+                                                        {/* Loading Indicator */}
+                                                        {pdfLoading && (
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-cream border-2 border-neutral-dark h-64">
+                                                                <Loader className="animate-spin text-primary mb-2" size={32} />
+                                                                <p className="text-neutral-gray text-sm">Đang tải PDF...</p>
+                                                            </div>
+                                                        )}
+                                                        {/* PDF Iframe */}
+                                                        <iframe
+                                                            src={proxyUrl}
+                                                            className="w-full h-64 border-2 border-neutral-dark"
+                                                            title="Certificate Preview"
+                                                            onLoad={() => setPdfLoading(false)}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <img
+                                        src={previewData.fileUrl}
+                                        alt="Certificate Preview"
+                                        className="w-full border-2 border-neutral-dark"
+                                    />
+                                    <a
+                                        href={previewData.fileUrl}
+                                        download={`${previewData.certificateId}.png`}
+                                        className="inline-block px-4 py-2 bg-primary text-white border-2 border-neutral-dark hover:bg-opacity-90"
+                                    >
+                                        Tải Xuống Hình Ảnh
+                                    </a>
+                                </div>
+                            )}
                         </div>
+
                         <div className="border-t pt-4">
                             <p className="text-sm text-neutral-gray mb-2">Thông Tin Sinh Viên</p>
                             <p><strong>Tên:</strong> {formData.studentName}</p>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, FileText, TrendingUp, Loader, Trash2 } from 'lucide-react';
+import { ArrowLeft, Users, FileText, TrendingUp, Loader, Trash2, Copy } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -58,6 +58,9 @@ const AdminDashboard = () => {
     const [showViewModal, setShowViewModal] = useState(false);
     const [viewTarget, setViewTarget] = useState(null);
     const [viewDetailsLoading, setViewDetailsLoading] = useState(false); // Lazy load state
+
+    // Copy state
+    const [copiedId, setCopiedId] = useState(null);
 
     // Pagination
     const [page, setPage] = useState(1);
@@ -261,6 +264,16 @@ const AdminDashboard = () => {
             setError(err.message);
         } finally {
             setRevokeLoading(false);
+        }
+    };
+
+    const handleCopy = async (certificateId) => {
+        try {
+            await navigator.clipboard.writeText(certificateId);
+            setCopiedId(certificateId);
+            setTimeout(() => setCopiedId(null), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
         }
     };
 
@@ -483,7 +496,20 @@ const AdminDashboard = () => {
                                             certificates.map((cert) => (
                                                 <tr key={cert.certId} className="border-b border-neutral-gray">
                                                     <td className="py-3 px-2 font-mono text-xs">
-                                                        {cert.certificateId}
+                                                        <div className="flex items-center gap-2">
+                                                            <span>{cert.certificateId}</span>
+                                                            <button
+                                                                onClick={() => handleCopy(cert.certificateId)}
+                                                                className="p-1 hover:bg-neutral-gray/20 rounded transition-colors"
+                                                                title="Copy mã chứng chỉ"
+                                                            >
+                                                                {copiedId === cert.certificateId ? (
+                                                                    <span className="text-green-600 text-xs">✓</span>
+                                                                ) : (
+                                                                    <Copy size={14} className="text-neutral-gray hover:text-neutral-dark" />
+                                                                )}
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                     <td className="py-3 px-2">{cert.studentName}</td>
                                                     <td className="py-3 px-2">{cert.courseName}</td>
