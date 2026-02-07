@@ -192,6 +192,8 @@ export const uploadCertificate = async (req, res) => {
         const cloudinaryResult = await withRetry(() => cloudinary.uploader.upload(filePath, {
             folder: 'certificates',
             resource_type: 'auto',
+            type: 'upload',       // Explicitly set as public
+            access_mode: 'public' // Ensure public access
         }));
 
         // Hash the file
@@ -213,13 +215,28 @@ export const uploadCertificate = async (req, res) => {
         // Generate certificate ID
         const certificateId = `CERT-${Date.now()}-${uuidv4().slice(0, 8).toUpperCase()}`;
 
+        // Determine file type
+        const fileType = mimeType.startsWith('image/') ? 'image' : 'pdf';
+
+        // Generate signed URL for PDF files (raw resource type requires signed URLs)
+        let fileUrl = cloudinaryResult.secure_url;
+        if (fileType === 'pdf') {
+            fileUrl = cloudinary.url(cloudinaryResult.public_id, {
+                resource_type: 'raw',
+                type: 'upload',
+                sign_url: true,
+                secure: true,
+                expires_at: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year
+            });
+        }
+
         res.json({
             success: true,
             certificateId,
             certHash,
-            fileUrl: cloudinaryResult.secure_url,
+            fileUrl,
             cloudinaryPublicId: cloudinaryResult.public_id,
-            fileType: mimeType.startsWith('image/') ? 'image' : 'pdf',
+            fileType,
             extractedData,
         });
     } catch (error) {
@@ -255,12 +272,14 @@ export const createCertificate = async (req, res) => {
         const pdfBuffer = await generateCertificatePDF(certificateData);
 
         // Upload PDF to Cloudinary with retry
+        // Note: Raw files (PDFs) on Cloudinary require signed URLs or download
         const cloudinaryResult = await withRetry(() => new Promise((resolve, reject) => {
             const uploadStream = cloudinary.uploader.upload_stream(
                 {
                     folder: 'certificates',
-                    resource_type: 'auto',
-                    format: 'pdf',
+                    resource_type: 'raw',
+                    public_id: `${certificateData.certificateId}.pdf`,
+                    type: 'upload'
                 },
                 (error, result) => {
                     if (error) reject(error);
@@ -294,7 +313,6 @@ export const createCertificate = async (req, res) => {
  */
 export const confirmCertificate = async (req, res) => {
     try {
-        // No MongoDB to save to. We just acknowledge success.
         res.json({
             success: true,
             message: 'Certificate issuance confirmed via Blockchain',
@@ -409,6 +427,11 @@ export const verifyCertificateById = async (req, res) => {
         } catch (error) {
             console.error('Integrity check failed:', error.message);
             integrityMessage = '⚠️ Không thể tải file để kiểm tra tính toàn vẹn (Cloudinary).';
+        }
+
+        // Regenerate signed URL for PDFs before returning
+        if (certificate.fileUrl && certificate.fileType === 'pdf') {
+            certificate.fileUrl = regenerateSignedUrl(certificate.fileUrl, certificate.fileType);
         }
 
         res.json({
@@ -527,6 +550,44 @@ export const verifyCertificateByFile = async (req, res) => {
  * Get certificate download URL
  * GET /api/cert/:certId/download
  */
+/**
+ * Helper to regenerate signed URL for PDF files
+ * Extracts public_id from Cloudinary URL and creates new signed URL
+ */
+const regenerateSignedUrl = (fileUrl, fileType) => {
+    if (fileType !== 'pdf') return fileUrl;
+
+    try {
+        // Extract public_id from URL, skipping signature and version
+        // Split by /upload/ and clean the result
+        const urlParts = fileUrl.split('/upload/');
+        if (urlParts.length > 1) {
+            const afterUpload = urlParts[1];
+            // Remove signature (s--xxx--/) and version (v123/) if present
+            const cleaned = afterUpload.replace(/^s--[^/]+--\//, '').replace(/^v\d+\//, '');
+            // Remove query params
+            const publicId = cleaned.split('?')[0];
+
+            // Generate new signed URL
+            return cloudinary.url(publicId, {
+                resource_type: 'raw',
+                type: 'upload',
+                sign_url: true,
+                secure: true,
+                expires_at: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) // 1 year
+            });
+        }
+    } catch (error) {
+        console.error('Failed to regenerate signed URL:', error);
+    }
+
+    return fileUrl; // Return original if extraction fails
+};
+
+/**
+ * Download certificate
+ * GET /api/cert/:certId/download
+ */
 export const downloadCertificate = async (req, res) => {
     try {
         const { certId } = req.params;
@@ -562,9 +623,12 @@ export const downloadCertificate = async (req, res) => {
             return res.status(404).json({ error: 'Không tìm thấy chứng chỉ' });
         }
 
+        // Regenerate signed URL for PDFs
+        const downloadUrl = regenerateSignedUrl(certificate.fileUrl, certificate.fileType);
+
         res.json({
             success: true,
-            downloadUrl: certificate.fileUrl,
+            downloadUrl,
             certificateId: certificate.certificateId,
             fileType: certificate.fileType,
         });
@@ -655,3 +719,108 @@ export const listCertificates = async (req, res) => {
         res.status(500).json({ error: clientMessage });
     }
 };
+
+/**
+ * Delete certificate file from Cloudinary
+ * DELETE /api/cert/delete-file
+ * Used when user cancels preview without issuing
+ */
+export const deleteCertificateFile = async (req, res) => {
+    try {
+        const { cloudinaryPublicId } = req.body;
+
+        if (!cloudinaryPublicId) {
+            return res.status(400).json({ error: 'Missing cloudinaryPublicId' });
+        }
+
+        console.log(`Deleting file from Cloudinary: ${cloudinaryPublicId}`);
+
+        // Try deleting as raw resource (for PDFs)
+        try {
+            await cloudinary.uploader.destroy(cloudinaryPublicId, {
+                resource_type: 'raw'
+            });
+            console.log(`Deleted as raw resource: ${cloudinaryPublicId}`);
+        } catch (rawError) {
+            console.warn('Failed to delete as raw:', rawError.message);
+        }
+
+        // Also try deleting as image resource (for images)
+        try {
+            await cloudinary.uploader.destroy(cloudinaryPublicId, {
+                resource_type: 'image'
+            });
+            console.log(`Deleted as image resource: ${cloudinaryPublicId}`);
+        } catch (imageError) {
+            console.warn('Failed to delete as image:', imageError.message);
+        }
+
+        res.json({
+            success: true,
+            message: 'File deletion attempted (may have already been deleted)'
+        });
+    } catch (error) {
+        console.error('Delete file error:', error);
+        // Don't fail the request even if deletion fails
+        res.json({
+            success: true,
+            message: 'Cleanup completed with warnings',
+            warning: error.message
+        });
+    }
+};
+
+/**
+ * Proxy PDF file from Cloudinary
+ * GET /api/cert/proxy-pdf/:publicId
+ * This endpoint downloads PDF from Cloudinary and streams it to client
+ * Bypasses Cloudinary's CORS restrictions for raw files
+ */
+export const proxyPDF = async (req, res) => {
+    try {
+        const { publicId } = req.params;
+
+        if (!publicId) {
+            return res.status(400).json({ error: 'Missing publicId' });
+        }
+
+        console.log(`Proxying PDF: ${publicId}`);
+        console.log(`Download mode: ${req.query.download === 'true'}`);
+
+        // Generate a temporary signed URL that works
+        console.log('Generating signed URL...');
+        const signedUrl = cloudinary.utils.private_download_url(publicId, 'pdf', {
+            resource_type: 'raw',
+            type: 'upload',
+            expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
+        });
+
+        console.log(`Using signed URL: ${signedUrl}`);
+
+        // Fetch the file using the signed URL
+        console.log('Fetching PDF buffer...');
+        const pdfBuffer = await fetchBuffer(signedUrl);
+        console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
+
+        // Check if download mode (for download button) or preview mode (for iframe)
+        const isDownload = req.query.download === 'true';
+        const disposition = isDownload ? 'attachment' : 'inline';
+
+        // Set headers for PDF
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `${disposition}; filename='${publicId.split('/').pop()}'`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+
+        // Send PDF buffer
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error('Proxy PDF error:', error);
+        res.status(500).json({
+            error: 'Failed to load PDF',
+            details: error.message,
+            publicId: req.params.publicId
+        });
+    }
+};
+

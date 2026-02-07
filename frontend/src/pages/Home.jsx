@@ -437,10 +437,39 @@ const Home = () => {
 
                                 <div className="mt-6 flex gap-4">
                                     <Button
-                                        onClick={() => handleDownload(
-                                            verifyResult.certificate.fileUrl,
-                                            `chung-chi-${verifyResult.certificate.certificateId}.png`
-                                        )}
+                                        onClick={() => {
+                                            const fileExtension = verifyResult.certificate.fileType === 'pdf' ? 'pdf' : 'png';
+
+                                            // For PDF, use proxy URL with fetch/blob
+                                            if (verifyResult.certificate.fileType === 'pdf') {
+                                                // Extract public_id from Cloudinary URL, skipping signature
+                                                // URL can be: .../upload/s--sig--/v1/folder/file.pdf or .../upload/v1/folder/file.pdf
+                                                // We want: folder/file.pdf (everything after the last /upload/.../)
+                                                let publicId = '';
+
+                                                // Try to find the actual public_id by removing signature and version
+                                                const urlParts = verifyResult.certificate.fileUrl.split('/upload/');
+                                                if (urlParts.length > 1) {
+                                                    const afterUpload = urlParts[1];
+                                                    // Remove signature (s--xxx--/) and version (v123/) if present
+                                                    const cleaned = afterUpload.replace(/^s--[^/]+--\//, '').replace(/^v\d+\//, '');
+                                                    // Remove query params
+                                                    publicId = cleaned.split('?')[0];
+                                                }
+
+                                                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/cert';
+                                                const downloadUrl = publicId ? `${apiBase}/proxy-pdf/${publicId}?download=true` : verifyResult.certificate.fileUrl;
+
+                                                // Use fetch + blob for PDF download
+                                                handleDownload(downloadUrl, `chung-chi-${verifyResult.certificate.certificateId}.pdf`);
+                                            } else {
+                                                // For images, use the existing fetch/blob method
+                                                handleDownload(
+                                                    verifyResult.certificate.fileUrl,
+                                                    `chung-chi-${verifyResult.certificate.certificateId}.${fileExtension}`
+                                                );
+                                            }
+                                        }}
                                         disabled={isDownloading}
                                     >
                                         {isDownloading ? (
